@@ -252,16 +252,33 @@ function createTitleElement(title) {
     
     // Helper function to parse duration and determine if title is too short
     function parseDuration(durationString) {
-        if (!durationString) return 0;
+        if (!durationString) {
+            console.log('parseDuration: no duration string provided');
+            return 0;
+        }
         
         // Parse duration like "1:23:45" or "0:05:30"
         const parts = durationString.split(':');
-        if (parts.length === 3) {
+        console.log('parseDuration: parsing', durationString, 'parts:', parts);
+        
+        if (parts.length === 2) {
+            // Handle MM:SS format
+            const minutes = parseInt(parts[0]) || 0;
+            const seconds = parseInt(parts[1]) || 0;
+            const totalSeconds = minutes * 60 + seconds;
+            console.log('parseDuration: MM:SS format -', minutes, 'min', seconds, 'sec =', totalSeconds, 'total seconds');
+            return totalSeconds;
+        } else if (parts.length === 3) {
+            // Handle HH:MM:SS format
             const hours = parseInt(parts[0]) || 0;
             const minutes = parseInt(parts[1]) || 0;
             const seconds = parseInt(parts[2]) || 0;
-            return hours * 3600 + minutes * 60 + seconds;
+            const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+            console.log('parseDuration: HH:MM:SS format -', hours, 'hr', minutes, 'min', seconds, 'sec =', totalSeconds, 'total seconds');
+            return totalSeconds;
         }
+        
+        console.log('parseDuration: unrecognized format, returning 0');
         return 0;
     }
     
@@ -269,6 +286,8 @@ function createTitleElement(title) {
     const durationInSeconds = parseDuration(title.duration);
     const isShortTitle = durationInSeconds > 0 && durationInSeconds < 1800; // 30 minutes = 1800 seconds
     const shouldCollapseByDefault = isShortTitle && !title.selected;
+    
+    console.log(`Title ${title.title_number}: duration="${title.duration}", seconds=${durationInSeconds}, isShort=${isShortTitle}, selected=${title.selected}, shouldCollapse=${shouldCollapseByDefault}`);
     
     // Helper function to create title summary
     function createTitleSummary() {
