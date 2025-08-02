@@ -666,19 +666,22 @@ function showRawOutput() {
                 
                 content.innerHTML = `
                     <div class="raw-output-section">
-                        <strong>File:</strong> ${data.filename}<br>
-                        <strong>Scan Time:</strong> ${data.raw_output.scan_timestamp || 'Unknown'}<br>
-                        <strong>Command:</strong> ${data.raw_output.command || 'Unknown'}<br>
-                        <strong>Exit Code:</strong> ${data.raw_output.exit_code !== undefined ? data.raw_output.exit_code : 'Unknown'}
+                        <h3>File Information</h3>
+                        <div class="file-info-content">
+                            <div><strong>File:</strong> ${data.filename}</div>
+                            <div><strong>Scan Time:</strong> ${data.raw_output.scan_timestamp || 'Unknown'}</div>
+                            <div><strong>Command:</strong> ${data.raw_output.command || 'Unknown'}</div>
+                            <div><strong>Exit Code:</strong> ${data.raw_output.exit_code !== undefined ? data.raw_output.exit_code : 'Unknown'}</div>
+                        </div>
                     </div>
                     
                     <div class="raw-output-section">
-                        <h3>Standard Output:</h3>
+                        <h3>Standard Output</h3>
                         <div class="raw-output-content">${data.raw_output.stdout || 'No output'}</div>
                     </div>
                     
                     <div class="raw-output-section">
-                        <h3>Standard Error:</h3>
+                        <h3>Standard Error</h3>
                         <div class="raw-output-content">${data.raw_output.stderr || 'No errors'}</div>
                     </div>
                 `;
