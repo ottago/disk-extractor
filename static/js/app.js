@@ -371,49 +371,51 @@ function createTitleElement(title) {
                           onchange="saveMetadata()">${title.synopsis || ''}</textarea>
             </div>
             
-            <div class="tracks-section">
-                <h4>Audio Tracks</h4>
-                <div class="track-list">
-                    ${title.audio_tracks.map((track, index) => {
-                        const suggestion = title.suggestions.audio[index];
-                        const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
-                        const isChecked = title.selected_audio_tracks.includes(track.TrackNumber) ? 'checked' : '';
-                        return `
-                            <div class="track-item ${suggestedClass}" onclick="toggleTrack('audio-${title.title_number}-${track.TrackNumber}')">
-                                <input type="checkbox" 
-                                       id="audio-${title.title_number}-${track.TrackNumber}"
-                                       ${isChecked}
-                                       onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
-                                <div class="track-info">
-                                    <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
-                                    <div class="track-details">${track.Description || ''}</div>
+            <div class="tracks-container">
+                <div class="tracks-section">
+                    <h4>Audio Tracks</h4>
+                    <div class="track-list">
+                        ${title.audio_tracks.map((track, index) => {
+                            const suggestion = title.suggestions.audio[index];
+                            const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
+                            const isChecked = title.selected_audio_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                            return `
+                                <div class="track-item ${suggestedClass}" onclick="toggleTrack('audio-${title.title_number}-${track.TrackNumber}')">
+                                    <input type="checkbox" 
+                                           id="audio-${title.title_number}-${track.TrackNumber}"
+                                           ${isChecked}
+                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
+                                    <div class="track-info">
+                                        <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
+                                        <div class="track-details">${track.Description || ''}</div>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
-                    }).join('')}
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
-            </div>
-            
-            <div class="tracks-section">
-                <h4>Subtitle Tracks</h4>
-                <div class="track-list">
-                    ${title.subtitle_tracks.map((track, index) => {
-                        const suggestion = title.suggestions.subtitles[index];
-                        const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
-                        const isChecked = title.selected_subtitle_tracks.includes(track.TrackNumber) ? 'checked' : '';
-                        return `
-                            <div class="track-item ${suggestedClass}" onclick="toggleTrack('subtitle-${title.title_number}-${track.TrackNumber}')">
-                                <input type="checkbox" 
-                                       id="subtitle-${title.title_number}-${track.TrackNumber}"
-                                       ${isChecked}
-                                       onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
-                                <div class="track-info">
-                                    <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
-                                    <div class="track-details">${track.Name || ''}</div>
+                
+                <div class="tracks-section">
+                    <h4>Subtitle Tracks</h4>
+                    <div class="track-list">
+                        ${title.subtitle_tracks.map((track, index) => {
+                            const suggestion = title.suggestions.subtitles[index];
+                            const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
+                            const isChecked = title.selected_subtitle_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                            return `
+                                <div class="track-item ${suggestedClass}" onclick="toggleTrack('subtitle-${title.title_number}-${track.TrackNumber}')">
+                                    <input type="checkbox" 
+                                           id="subtitle-${title.title_number}-${track.TrackNumber}"
+                                           ${isChecked}
+                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
+                                    <div class="track-info">
+                                        <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
+                                        <div class="track-details">${track.Name || ''}</div>
+                                    </div>
                                 </div>
-                            </div>
-                        `;
-                    }).join('')}
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
             </div>
         </div>
