@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disk Extractor - Movie Metadata Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            margin-top: 0.25rem;
+        }
+        
+        .container {
+            display: flex;
+            height: calc(100vh - 80px);
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            flex: 1;
+            background: white;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+        
+        .file-list {
+            list-style: none;
+        }
+        
+        .file-item {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .file-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .file-item.active {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .file-item.has-metadata {
+            border-left: 4px solid #4caf50;
+        }
+        
+        .file-item.no-metadata {
+            border-left: 4px solid #f44336;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+        
+        .file-info {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        
+        .status-indicator.has-metadata {
+            background-color: #4caf50;
+        }
+        
+        .status-indicator.no-metadata {
+            background-color: #f44336;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 3rem;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 1rem;
+            color: #999;
+        }
+        
+        /* Enhanced metadata display */
+        .file-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .file-info-left .file-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .file-info-left .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .file-info-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .action-button {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .action-button:hover {
+            background: #f8f9fa;
+            border-color: #2196f3;
+        }
+        
+        .scan-button {
+            background: #2196f3;
+            color: white;
+            border-color: #2196f3;
+        }
+        
+        .scan-button:hover {
+            background: #1976d2;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .handbrake-error {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .handbrake-error h3 {
+            color: #d32f2f;
+            margin-bottom: 0.5rem;
+        }
+        
+        .titles-container {
+            margin-top: 1rem;
+        }
+        
+        .title-section {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        .title-header {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .title-header:hover {
+            background: #e9ecef;
+        }
+        
+        .title-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .title-checkbox {
+            margin-right: 0.5rem;
+        }
+        
+        .suggestion-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: 0.5rem;
+        }
+        
+        .suggestion-badge.suggested {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        
+        .suggestion-badge.not-suggested {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .title-details {
+            padding: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2196f3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .tracks-section {
+            margin-top: 1rem;
+        }
+        
+        .tracks-section h4 {
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+        
+        .track-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        
+        .track-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .track-item:last-child {
+            border-bottom: none;
+        }
+        
+        .track-item.suggested {
+            background: #f8fff8;
+        }
+        
+        .track-info {
+            flex: 1;
+            font-size: 0.875rem;
+        }
+        
+        .track-language {
+            font-weight: 500;
+        }
+        
+        .track-details {
+            color: #666;
+        }
+        
+        /* Raw Output Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 2% auto;
+            padding: 0;
+            border-radius: 8px;
+            width: 90%;
+            height: 90%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+        
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+        
+        .modal-body {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .raw-output-container {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+        
+        .raw-output-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .raw-output-section h4 {
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-size: 1rem;
+        }
+        
+        .raw-output-meta {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 4px;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .raw-output-meta strong {
+            color: #1976d2;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: 40vh;
+            }
+            
+            .main-content {
+                padding: 1rem;
+            }
+            
+            .file-info-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Disk Extractor - Movie Metadata Manager</h1>
+        <p>Directory: {{ directory }}</p>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <ul class="file-list" id="fileList">
+                {% for movie in movies %}
+                <li class="file-item {% if movie.has_metadata %}has-metadata{% else %}no-metadata{% endif %}" 
+                    data-filename="{{ movie.file_name }}"
+                    onclick="selectFile('{{ movie.file_name }}')">
+                    <div class="file-name">
+                        <span class="status-indicator {% if movie.has_metadata %}has-metadata{% else %}no-metadata{% endif %}"></span>
+                        {{ movie.file_name }}
+                    </div>
+                    <div class="file-info">
+                        {% if movie.size_mb %}{{ movie.size_mb }} MB{% endif %}
+                        {% if movie.has_metadata %} • Has metadata{% else %} • No metadata{% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            
+            {% if not movies %}
+            <div class="empty-state">
+                <h3>No .img files found</h3>
+                <p>Place .img movie files in the selected directory to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="main-content">
+            <div id="metadataForm" style="display: none;">
+                <div class="file-info-header">
+                    <div class="file-info-left">
+                        <div class="file-name" id="currentFileName"></div>
+                        <div class="file-size" id="currentFileSize"></div>
+                    </div>
+                    <div class="file-info-actions">
+                        <button type="button" onclick="scanFile()" class="action-button scan-button" id="scanButton">
+                            🔍 Scan with HandBrake
+                        </button>
+                        <button type="button" onclick="showRawOutput()" class="action-button" id="rawOutputButton" style="display: none;">
+                            📄 Raw Output
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="enhancedMetadata" style="display: none;">
+                    <div id="scanError" class="handbrake-error" style="display: none;">
+                        <h3>⚠️ HandBrake Scan Error</h3>
+                        <p id="scanErrorMessage"></p>
+                        <button type="button" onclick="scanFile()" class="action-button scan-button">🔄 Retry Scan</button>
+                    </div>
+                    
+                    <div class="titles-container" id="titlesContainer">
+                        <!-- Titles will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            
+            <div id="emptyState" class="empty-state">
+                <h3>Select a movie file</h3>
+                <p>Choose a file from the list to view and edit its metadata, or scan it with HandBrake to discover tracks.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Raw Output Modal -->
+    <div id="rawOutputModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Raw HandBrake Output</h3>
+                <span class="close" onclick="closeRawOutputModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="rawOutputContent">
+                    <!-- Content will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentMovies = {{ movies | tojson }};
+        let selectedFile = null;
+        let enhancedMetadata = null;
+        
+        function selectFile(filename) {
+            selectedFile = filename;
+            
+            // Update UI
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`[data-filename="${filename}"]`).classList.add('active');
+            
+            // Find movie data
+            const movie = currentMovies.find(m => m.file_name === filename);
+            if (!movie) return;
+            
+            // Show basic file info
+            document.getElementById('currentFileName').textContent = movie.file_name;
+            document.getElementById('currentFileSize').textContent = movie.size_mb ? `${movie.size_mb} MB` : '';
+            
+            // Show form
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('metadataForm').style.display = 'block';
+            
+            // IMPORTANT: Clear previous file's data immediately
+            enhancedMetadata = null;
+            document.getElementById('enhancedMetadata').style.display = 'none';
+            document.getElementById('rawOutputButton').style.display = 'none';
+            
+            // Clear any existing content in the titles container
+            document.getElementById('titlesContainer').innerHTML = '';
+            
+            // Try to load cached enhanced metadata for THIS specific file
+            loadEnhancedMetadata(filename);
+        }
+        
+        function loadEnhancedMetadata(filename) {
+            // Make sure we're loading data for the currently selected file
+            if (filename !== selectedFile) {
+                console.log('File selection changed, aborting load for', filename);
+                return;
+            }
+            
+            // Try to get enhanced metadata (this will use cached data if available)
+            fetch(`/api/enhanced_metadata/${encodeURIComponent(filename)}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Double-check we're still on the same file (user might have switched)
+                    if (filename !== selectedFile) {
+                        console.log('File selection changed during load, ignoring data for', filename);
+                        return;
+                    }
+                    
+                    if (data.success && data.metadata && data.metadata.titles && data.metadata.titles.length > 0) {
+                        // We have cached HandBrake data - display it
+                        enhancedMetadata = data.metadata;
+                        displayEnhancedMetadata();
+                        document.getElementById('rawOutputButton').style.display = 'inline-block';
+                        console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
+                    } else {
+                        // No cached data - hide enhanced metadata and show scan button
+                        enhancedMetadata = null;
+                        document.getElementById('enhancedMetadata').style.display = 'none';
+                        document.getElementById('rawOutputButton').style.display = 'none';
+                        console.log('No cached metadata available for', filename);
+                    }
+                })
+                .catch(error => {
+                    // Only log error if we're still on the same file
+                    if (filename === selectedFile) {
+                        console.log('No cached metadata available for', filename, ':', error.message);
+                        enhancedMetadata = null;
+                        document.getElementById('enhancedMetadata').style.display = 'none';
+                        document.getElementById('rawOutputButton').style.display = 'none';
+                    }
+                });
+        }
+        
+        function scanFile() {
+            if (!selectedFile) return;
+            
+            const scanButton = document.getElementById('scanButton');
+            const originalText = scanButton.innerHTML;
+            
+            // Show loading state
+            scanButton.innerHTML = '⏳ Scanning...';
+            scanButton.classList.add('loading');
+            
+            fetch(`/api/scan_file/${encodeURIComponent(selectedFile)}`)
+                .then(response => response.json())
+                .then(data => {
+                    scanButton.innerHTML = originalText;
+                    scanButton.classList.remove('loading');
+                    
+                    if (data.success) {
+                        enhancedMetadata = data.metadata;
+                        displayEnhancedMetadata();
+                        
+                        // Show raw output button if we have enhanced metadata
+                        document.getElementById('rawOutputButton').style.display = 'inline-block';
+                    } else {
+                        showScanError(data.error);
+                    }
+                })
+                .catch(error => {
+                    scanButton.innerHTML = originalText;
+                    scanButton.classList.remove('loading');
+                    showScanError('Network error: ' + error.message);
+                });
+        }
+        
+        function showScanError(error) {
+            document.getElementById('scanErrorMessage').textContent = error;
+            document.getElementById('scanError').style.display = 'block';
+            document.getElementById('enhancedMetadata').style.display = 'block';
+            document.getElementById('titlesContainer').innerHTML = '';
+        }
+        
+        function displayEnhancedMetadata() {
+            if (!enhancedMetadata) return;
+            
+            // Hide error if showing
+            document.getElementById('scanError').style.display = 'none';
+            
+            // Show enhanced metadata section
+            document.getElementById('enhancedMetadata').style.display = 'block';
+            
+            // Display titles
+            const titlesContainer = document.getElementById('titlesContainer');
+            titlesContainer.innerHTML = '';
+            
+            if (enhancedMetadata.scan_error) {
+                showScanError(enhancedMetadata.scan_error);
+                return;
+            }
+            
+            enhancedMetadata.titles.forEach(title => {
+                const titleElement = createTitleElement(title);
+                titlesContainer.appendChild(titleElement);
+            });
+        }
+        
+        function createTitleElement(title) {
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'title-section';
+            titleDiv.dataset.titleNumber = title.title_number;
+            
+            const suggested = title.suggestions.title.suggested ? 'suggested' : 'not-suggested';
+            const suggestedText = title.suggestions.title.reason || 'Unknown';
+            
+            titleDiv.innerHTML = `
+                <div class="title-header" onclick="toggleTitle(${title.title_number})">
+                    <div class="title-header-left">
+                        <input type="checkbox" 
+                               id="title-${title.title_number}-selected" 
+                               class="title-checkbox"
+                               ${title.selected ? 'checked' : ''}
+                               onchange="updateTitleSelection(${title.title_number})">
+                        <label for="title-${title.title_number}-selected">
+                            <strong>Title ${title.title_number}</strong>
+                            <span class="suggestion-badge ${suggested}">${suggestedText}</span>
+                        </label>
+                    </div>
+                    <div class="title-header-right">
+                        <span class="duration">${title.duration}</span>
+                    </div>
+                </div>
+                
+                <div class="title-details" id="title-${title.title_number}-details" 
+                     style="display: ${title.selected ? 'block' : 'none'};">
+                    
+                    <div class="form-group">
+                        <label for="title-${title.title_number}-name">Movie Name:</label>
+                        <input type="text" 
+                               id="title-${title.title_number}-name" 
+                               value="${title.movie_name || ''}"
+                               onchange="saveMetadata()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="title-${title.title_number}-date">Release Date:</label>
+                        <input type="date" 
+                               id="title-${title.title_number}-date" 
+                               value="${title.release_date || ''}"
+                               onchange="saveMetadata()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="title-${title.title_number}-synopsis">Synopsis:</label>
+                        <textarea id="title-${title.title_number}-synopsis" 
+                                  onchange="saveMetadata()">${title.synopsis || ''}</textarea>
+                    </div>
+                    
+                    <div class="tracks-section">
+                        <h4>Audio Tracks</h4>
+                        <div class="track-list">
+                            ${title.audio_tracks.map((track, index) => {
+                                const suggestion = title.suggestions.audio[index];
+                                const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
+                                const isChecked = title.selected_audio_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                                return `
+                                    <div class="track-item ${suggestedClass}">
+                                        <input type="checkbox" 
+                                               id="audio-${title.title_number}-${track.TrackNumber}"
+                                               ${isChecked}
+                                               onchange="saveMetadata()">
+                                        <div class="track-info">
+                                            <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
+                                            <div class="track-details">${track.Description || ''}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="tracks-section">
+                        <h4>Subtitle Tracks</h4>
+                        <div class="track-list">
+                            ${title.subtitle_tracks.map((track, index) => {
+                                const suggestion = title.suggestions.subtitles[index];
+                                const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
+                                const isChecked = title.selected_subtitle_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                                return `
+                                    <div class="track-item ${suggestedClass}">
+                                        <input type="checkbox" 
+                                               id="subtitle-${title.title_number}-${track.TrackNumber}"
+                                               ${isChecked}
+                                               onchange="saveMetadata()">
+                                        <div class="track-info">
+                                            <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
+                                            <div class="track-details">${track.Name || ''}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return titleDiv;
+        }
+        
+        function toggleTitle(titleNumber) {
+            const checkbox = document.getElementById(`title-${titleNumber}-selected`);
+            checkbox.checked = !checkbox.checked;
+            updateTitleSelection(titleNumber);
+        }
+        
+        function updateTitleSelection(titleNumber) {
+            const checkbox = document.getElementById(`title-${titleNumber}-selected`);
+            const details = document.getElementById(`title-${titleNumber}-details`);
+            
+            if (checkbox.checked) {
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+            
+            saveMetadata();
+        }
+        
+        function saveMetadata() {
+            if (!selectedFile || !enhancedMetadata) return;
+            
+            // Collect all title data
+            const titles = enhancedMetadata.titles.map(title => {
+                const titleNumber = title.title_number;
+                const selected = document.getElementById(`title-${titleNumber}-selected`).checked;
+                
+                if (!selected) {
+                    return {
+                        title_number: titleNumber,
+                        selected: false,
+                        movie_name: '',
+                        release_date: '',
+                        synopsis: '',
+                        selected_audio_tracks: [],
+                        selected_subtitle_tracks: []
+                    };
+                }
+                
+                // Get selected audio tracks
+                const selectedAudioTracks = [];
+                title.audio_tracks.forEach(track => {
+                    const checkbox = document.getElementById(`audio-${titleNumber}-${track.TrackNumber}`);
+                    if (checkbox && checkbox.checked) {
+                        selectedAudioTracks.push(track.TrackNumber);
+                    }
+                });
+                
+                // Get selected subtitle tracks
+                const selectedSubtitleTracks = [];
+                title.subtitle_tracks.forEach(track => {
+                    const checkbox = document.getElementById(`subtitle-${titleNumber}-${track.TrackNumber}`);
+                    if (checkbox && checkbox.checked) {
+                        selectedSubtitleTracks.push(track.TrackNumber);
+                    }
+                });
+                
+                return {
+                    title_number: titleNumber,
+                    selected: true,
+                    movie_name: document.getElementById(`title-${titleNumber}-name`).value,
+                    release_date: document.getElementById(`title-${titleNumber}-date`).value,
+                    synopsis: document.getElementById(`title-${titleNumber}-synopsis`).value,
+                    selected_audio_tracks: selectedAudioTracks,
+                    selected_subtitle_tracks: selectedSubtitleTracks
+                };
+            });
+            
+            const metadata = {
+                filename: selectedFile,
+                file_name: selectedFile,
+                size_mb: enhancedMetadata.size_mb,
+                titles: titles
+            };
+            
+            fetch('/api/save_metadata', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(metadata)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the file item to show it has metadata
+                    const fileItem = document.querySelector(`[data-filename="${selectedFile}"]`);
+                    fileItem.classList.remove('no-metadata');
+                    fileItem.classList.add('has-metadata');
+                    
+                    const indicator = fileItem.querySelector('.status-indicator');
+                    indicator.classList.remove('no-metadata');
+                    indicator.classList.add('has-metadata');
+                    
+                    const info = fileItem.querySelector('.file-info');
+                    info.innerHTML = info.innerHTML.replace('No metadata', 'Has metadata');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving metadata:', error);
+            });
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                const items = Array.from(document.querySelectorAll('.file-item'));
+                const currentIndex = items.findIndex(item => item.classList.contains('active'));
+                
+                let newIndex;
+                if (e.key === 'ArrowUp') {
+                    newIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+                } else {
+                    newIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+                }
+                
+                if (items[newIndex]) {
+                    const filename = items[newIndex].dataset.filename;
+                    selectFile(filename);
+                }
+            }
+        });
+        
+        function showRawOutput() {
+            if (!selectedFile) return;
+            
+            fetch(`/api/raw_output/${encodeURIComponent(selectedFile)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.has_raw_data) {
+                        displayRawOutput(data.raw_output, data.filename);
+                    } else {
+                        alert(data.message || data.error || 'No raw output available');
+                    }
+                })
+                .catch(error => {
+                    alert('Error fetching raw output: ' + error.message);
+                });
+        }
+        
+        function displayRawOutput(rawData, filename) {
+            const modal = document.getElementById('rawOutputModal');
+            const content = document.getElementById('rawOutputContent');
+            
+            // Format the raw output data
+            let html = `
+                <div class="raw-output-meta">
+                    <strong>File:</strong> ${filename}<br>
+                    <strong>Scan Time:</strong> ${rawData.scan_timestamp || 'Unknown'}<br>
+                    <strong>Command:</strong> ${rawData.command || 'Unknown'}<br>
+                    <strong>Exit Code:</strong> ${rawData.exit_code !== undefined ? rawData.exit_code : 'Unknown'}
+                </div>
+            `;
+            
+            if (rawData.stdout) {
+                html += `
+                    <div class="raw-output-section">
+                        <h4>Standard Output (stdout)</h4>
+                        <div class="raw-output-container">${escapeHtml(rawData.stdout)}</div>
+                    </div>
+                `;
+            }
+            
+            if (rawData.stderr) {
+                html += `
+                    <div class="raw-output-section">
+                        <h4>Standard Error (stderr)</h4>
+                        <div class="raw-output-container">${escapeHtml(rawData.stderr)}</div>
+                    </div>
+                `;
+            }
+            
+            content.innerHTML = html;
+            modal.style.display = 'block';
+        }
+        
+        function closeRawOutputModal() {
+            document.getElementById('rawOutputModal').style.display = 'none';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('rawOutputModal');
+            if (event.target === modal) {
+                closeRawOutputModal();
+            }
+        }
+    </script>
+</body>
+</html>

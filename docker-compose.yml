@@ -1,0 +1,40 @@
+services:
+  disk-extractor:
+    build: .
+    container_name: disk-extractor
+    ports:
+      - "5000:5000"
+    volumes:
+      # EDIT THIS: Change the path before the colon to your movie directory
+      #- /path/to/your/movies:/movies
+      - /mnt/md0/offline/media/ToBeEncoded:/movies
+      # Optional: Mount additional directories
+      # - /path/to/output:/output
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Automatically start with the mounted directory
+    command: ["python3", "app.py", "/movies"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Quick Setup Instructions:
+# 1. Edit the volume path above: change "/path/to/your/movies" to your actual movie directory
+# 2. Run: docker-compose up -d
+# 3. Access: http://localhost:5000
+# 4. The app will automatically use the mounted /movies directory
+
+# Example configurations:
+# For movies in /home/user/Movies:
+#   - /home/user/Movies:/movies
+# 
+# For movies in /media/movies:
+#   - /media/movies:/movies
+#
+# Multiple directories:
+#   - /home/user/Movies:/movies
+#   - /home/user/Output:/output
