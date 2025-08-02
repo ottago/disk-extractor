@@ -9,6 +9,25 @@ function initializeApp(movies) {
     console.log('App initialized with', movies.length, 'movies');
 }
 
+// Show loading indicator in titles container
+function showTitlesLoading() {
+    const titlesContainer = document.getElementById('titlesContainer');
+    if (titlesContainer) {
+        titlesContainer.innerHTML = `
+            <div class="loading-indicator">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Loading movie titles...</div>
+            </div>
+        `;
+    }
+}
+
+// Hide loading indicator (called when content is ready)
+function hideTitlesLoading() {
+    // This is handled by displayEnhancedMetadata() which clears the container
+    // and populates it with actual content
+}
+
 // File selection
 function selectFile(filename) {
     console.log('selectFile called for:', filename);
@@ -35,13 +54,13 @@ function selectFile(filename) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('metadataForm').style.display = 'block';
     
-    // IMPORTANT: Clear previous file's data immediately
+    // IMPORTANT: Clear previous file's data immediately and show loading
     enhancedMetadata = null;
     document.getElementById('enhancedMetadata').style.display = 'none';
     document.getElementById('rawOutputButton').style.display = 'none';
     
-    // Clear any existing content in the titles container
-    document.getElementById('titlesContainer').innerHTML = '';
+    // Show loading indicator while fetching data
+    showTitlesLoading();
     
     // Try to load cached enhanced metadata for THIS specific file
     loadEnhancedMetadata(filename);
@@ -82,20 +101,28 @@ function loadEnhancedMetadata(filename) {
                 document.getElementById('rawOutputButton').style.display = 'inline-block';
                 console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
             } else {
-                // No cached data - hide enhanced metadata and show scan button
+                // No cached data - clear loading and hide enhanced metadata
                 enhancedMetadata = null;
                 document.getElementById('enhancedMetadata').style.display = 'none';
                 document.getElementById('rawOutputButton').style.display = 'none';
+                document.getElementById('titlesContainer').innerHTML = '';
                 console.log('No cached metadata available for', filename);
             }
         })
         .catch(error => {
-            // Only log error if we're still on the same file
+            // Only handle error if we're still on the same file
             if (filename === selectedFile) {
                 console.error('Error loading metadata for', filename, ':', error);
                 enhancedMetadata = null;
                 document.getElementById('enhancedMetadata').style.display = 'none';
                 document.getElementById('rawOutputButton').style.display = 'none';
+                // Clear loading indicator and show error state
+                document.getElementById('titlesContainer').innerHTML = `
+                    <div class="loading-indicator">
+                        <div style="color: #d32f2f; font-weight: 500;">⚠️ Error loading metadata</div>
+                        <div style="font-size: 0.875rem; margin-top: 0.5rem;">Please try scanning the file</div>
+                    </div>
+                `;
             }
         });
 }
@@ -111,8 +138,9 @@ function scanFile() {
     scanButton.innerHTML = '⏳ Scanning...';
     scanButton.disabled = true;
     
-    // Hide any existing enhanced metadata
+    // Hide any existing enhanced metadata and show loading in titles container
     document.getElementById('enhancedMetadata').style.display = 'none';
+    showTitlesLoading();
     
     fetch(`/api/scan_file/${encodeURIComponent(selectedFile)}`)
         .then(response => response.json())
@@ -200,6 +228,26 @@ function createTitleElement(title) {
         return year && year.length === 4 ? year : '';
     }
     
+    // Helper function to parse duration and determine if title is too short
+    function parseDuration(durationString) {
+        if (!durationString) return 0;
+        
+        // Parse duration like "1:23:45" or "0:05:30"
+        const parts = durationString.split(':');
+        if (parts.length === 3) {
+            const hours = parseInt(parts[0]) || 0;
+            const minutes = parseInt(parts[1]) || 0;
+            const seconds = parseInt(parts[2]) || 0;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+        return 0;
+    }
+    
+    // Determine if title should be collapsed by default (less than 30 minutes)
+    const durationInSeconds = parseDuration(title.duration);
+    const isShortTitle = durationInSeconds > 0 && durationInSeconds < 1800; // 30 minutes = 1800 seconds
+    const shouldCollapseByDefault = isShortTitle && !title.selected;
+    
     // Helper function to create title summary
     function createTitleSummary() {
         const movieName = title.movie_name || '';
@@ -225,24 +273,24 @@ function createTitleElement(title) {
     }
     
     titleDiv.innerHTML = `
-        <div class="title-header" onclick="toggleTitle(${title.title_number})">
+        <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''}" onclick="toggleTitle(${title.title_number})">
             <div class="title-checkbox">
                 <input type="checkbox" 
                        id="title-${title.title_number}-selected"
                        ${title.selected ? 'checked' : ''}
                        onclick="event.stopPropagation(); saveMetadata();">
             </div>
-            <div class="title-info">
+            <div class="title-info" style="display: ${shouldCollapseByDefault ? 'none' : 'flex'};">
                 <span>Title ${title.title_number}</span>
                 <span class="suggestion-badge ${suggested}">${suggestedText}</span>
             </div>
-            <div id="title-${title.title_number}-summary" class="title-summary" style="display: none;">
+            <div id="title-${title.title_number}-summary" class="title-summary" style="display: ${shouldCollapseByDefault ? 'flex' : 'none'};">
                 ${createTitleSummary()}
             </div>
-            <div class="expand-icon" id="title-${title.title_number}-icon">▼</div>
+            <div class="expand-icon ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-icon">${shouldCollapseByDefault ? '▶' : '▼'}</div>
         </div>
         
-        <div class="title-content" id="title-${title.title_number}-content">
+        <div class="title-content ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-content" style="display: ${shouldCollapseByDefault ? 'none' : 'block'};">
             <div class="form-group">
                 <label for="title-${title.title_number}-name">Movie Name:</label>
                 <input type="text" 
