@@ -7,6 +7,65 @@ let enhancedMetadata = null;
 function initializeApp(movies) {
     currentMovies = movies;
     console.log('App initialized with', movies.length, 'movies');
+    
+    // Initialize resizer
+    initializeResizer();
+}
+
+// Initialize resizer functionality
+function initializeResizer() {
+    const resizer = document.getElementById('resizer');
+    const sidebar = document.querySelector('.sidebar');
+    const container = document.querySelector('.container');
+    
+    if (!resizer || !sidebar || !container) {
+        console.error('Resizer elements not found');
+        return;
+    }
+    
+    let isResizing = false;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        
+        // Prevent text selection during resize
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const containerRect = container.getBoundingClientRect();
+        const newWidth = e.clientX - containerRect.left - 16; // Account for container padding
+        
+        // Enforce min/max width constraints
+        const minWidth = 200;
+        const maxWidth = Math.min(600, containerRect.width * 0.6); // Max 60% of container width
+        
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+            sidebar.style.width = newWidth + 'px';
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Save the width to localStorage for persistence
+            const currentWidth = sidebar.style.width || '300px';
+            localStorage.setItem('sidebarWidth', currentWidth);
+        }
+    });
+    
+    // Restore saved width on page load
+    const savedWidth = localStorage.getItem('sidebarWidth');
+    if (savedWidth) {
+        sidebar.style.width = savedWidth;
+    }
 }
 
 // Show loading indicator in titles container
