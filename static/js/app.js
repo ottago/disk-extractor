@@ -11,14 +11,19 @@ function initializeApp(movies) {
 
 // Show loading indicator in titles container
 function showTitlesLoading() {
+    console.log('showTitlesLoading called');
     const titlesContainer = document.getElementById('titlesContainer');
     if (titlesContainer) {
+        console.log('Setting loading indicator HTML');
         titlesContainer.innerHTML = `
             <div class="loading-indicator">
                 <div class="loading-spinner"></div>
                 <div class="loading-text">Loading movie titles...</div>
             </div>
         `;
+        console.log('Loading indicator HTML set, current content:', titlesContainer.innerHTML);
+    } else {
+        console.error('titlesContainer element not found!');
     }
 }
 
@@ -54,12 +59,13 @@ function selectFile(filename) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('metadataForm').style.display = 'block';
     
-    // IMPORTANT: Clear previous file's data immediately and show loading
+    // IMPORTANT: Clear previous file's data and show enhanced metadata section
     enhancedMetadata = null;
-    document.getElementById('enhancedMetadata').style.display = 'none';
+    document.getElementById('enhancedMetadata').style.display = 'block'; // Show section so loading is visible
     document.getElementById('rawOutputButton').style.display = 'none';
     
     // Show loading indicator while fetching data
+    console.log('Showing loading indicator for:', filename);
     showTitlesLoading();
     
     // Try to load cached enhanced metadata for THIS specific file
@@ -78,6 +84,10 @@ function loadEnhancedMetadata(filename) {
     
     console.log('Fetching enhanced metadata for:', filename);
     
+    // Add a minimum loading time to make the indicator visible
+    const startTime = Date.now();
+    const minLoadingTime = 500; // 500ms minimum
+    
     // Try to get enhanced metadata (this will use cached data if available)
     fetch(`/api/enhanced_metadata/${encodeURIComponent(filename)}`)
         .then(response => {
@@ -93,21 +103,33 @@ function loadEnhancedMetadata(filename) {
                 return;
             }
             
-            if (data.success && data.metadata && data.metadata.titles && data.metadata.titles.length > 0) {
-                // We have cached HandBrake data - display it
-                console.log('Setting enhancedMetadata and calling displayEnhancedMetadata for', filename);
-                enhancedMetadata = data.metadata;
-                displayEnhancedMetadata();
-                document.getElementById('rawOutputButton').style.display = 'inline-block';
-                console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
-            } else {
-                // No cached data - clear loading and hide enhanced metadata
-                enhancedMetadata = null;
-                document.getElementById('enhancedMetadata').style.display = 'none';
-                document.getElementById('rawOutputButton').style.display = 'none';
-                document.getElementById('titlesContainer').innerHTML = '';
-                console.log('No cached metadata available for', filename);
-            }
+            // Calculate remaining time to show loading
+            const elapsedTime = Date.now() - startTime;
+            const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+            
+            // Wait for minimum loading time before showing results
+            setTimeout(() => {
+                if (filename !== selectedFile) {
+                    console.log('File selection changed during delay, ignoring data for', filename);
+                    return;
+                }
+                
+                if (data.success && data.metadata && data.metadata.titles && data.metadata.titles.length > 0) {
+                    // We have cached HandBrake data - display it
+                    console.log('Setting enhancedMetadata and calling displayEnhancedMetadata for', filename);
+                    enhancedMetadata = data.metadata;
+                    displayEnhancedMetadata();
+                    document.getElementById('rawOutputButton').style.display = 'inline-block';
+                    console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
+                } else {
+                    // No cached data - clear loading and hide enhanced metadata
+                    enhancedMetadata = null;
+                    document.getElementById('enhancedMetadata').style.display = 'none';
+                    document.getElementById('rawOutputButton').style.display = 'none';
+                    document.getElementById('titlesContainer').innerHTML = '';
+                    console.log('No cached metadata available for', filename);
+                }
+            }, remainingTime);
         })
         .catch(error => {
             // Only handle error if we're still on the same file
