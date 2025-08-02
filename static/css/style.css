@@ -271,6 +271,8 @@ body {
 
 .title-header {
     padding: 0.4rem;
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
     cursor: pointer;
     user-select: none;
     display: flex;
@@ -292,32 +294,97 @@ body {
 
 .title-checkbox {
     flex-shrink: 0;
-    padding-left: 0.8rem;
 }
 
-.title-info {
-    flex: 1;
+.title-basic-info {
     display: flex;
     align-items: center;
     gap: 1rem;
-    font-weight: 500;
+    flex-shrink: 0;
 }
 
-.title-summary {
+.title-number {
+    font-weight: 500;
+    color: #333;
+}
+
+.content-suggestion {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+}
+
+.content-suggestion.suggested {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.content-suggestion.not-suggested {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.movie-name-box {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 0.25rem 0.75rem;
+    border-radius: 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.title-spacer {
+    flex: 1;
+}
+
+.title-summary-info {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    color: #666;
+    gap: 0.75rem;
+    flex-shrink: 0;
 }
 
 .track-count {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.duration-display {
+    font-size: 0.875rem;
+    color: #666;
+    font-family: monospace;
 }
 
 .expand-icon {
+    flex-shrink: 0;
+    padding-right: 0.8rem;
+    transition: transform 0.2s;
+    font-size: 1.2rem;
+    color: #666;
+    cursor: pointer;
+}
+
+.expand-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.title-content {
+    padding: 1rem;
+    padding-block-start: 0.4rem;
+    padding-block-end: 0rem;
+    display: block;
+}
+
+.title-content.collapsed {
+    display: none;
+}
     flex-shrink: 0;
     padding-right: 1rem;
     transition: transform 0.2s;

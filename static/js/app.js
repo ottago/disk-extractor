@@ -239,6 +239,7 @@ function createTitleElement(title) {
     const titleDiv = document.createElement('div');
     titleDiv.className = 'title-section';
     titleDiv.dataset.titleNumber = title.title_number;
+    titleDiv.dataset.duration = title.duration || '';
     
     const suggested = title.suggestions.title.suggested ? 'suggested' : 'not-suggested';
     const suggestedText = title.suggestions.title.reason || 'Unknown';
@@ -321,14 +322,27 @@ function createTitleElement(title) {
                        ${title.selected ? 'checked' : ''}
                        onclick="event.stopPropagation(); saveMetadata();">
             </div>
-            <div class="title-info" style="display: ${shouldCollapseByDefault ? 'none' : 'flex'};">
-                <span>Title ${title.title_number}</span>
-                <span class="suggestion-badge ${suggested}">${suggestedText}</span>
+            
+            <div class="title-basic-info">
+                <span class="title-number">Title ${title.title_number}</span>
+                <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${suggestedText}</span>
             </div>
-            <div id="title-${title.title_number}-summary" class="title-summary" style="display: ${shouldCollapseByDefault ? 'flex' : 'none'};">
-                ${createTitleSummary()}
+            
+            <div class="movie-name-box" style="display: ${shouldCollapseByDefault && title.movie_name ? 'block' : 'none'};">
+                ${title.movie_name || ''}
             </div>
-            <div class="expand-icon ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-icon">${shouldCollapseByDefault ? '▶' : '▼'}</div>
+            
+            <div class="title-spacer"></div>
+            
+            <div class="title-summary-info">
+                ${shouldCollapseByDefault && title.selected_audio_tracks.length > 0 ? `<span class="track-count">🔊 ${title.selected_audio_tracks.length}</span>` : ''}
+                ${shouldCollapseByDefault && title.selected_subtitle_tracks.length > 0 ? `<span class="track-count">💬 ${title.selected_subtitle_tracks.length}</span>` : ''}
+                ${title.duration ? `<span class="duration-display">${title.duration}</span>` : ''}
+            </div>
+            
+            <div class="expand-icon ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-icon">
+                ${shouldCollapseByDefault ? '▶' : '▼'}
+            </div>
         </div>
         
         <div class="title-content ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-content" style="display: ${shouldCollapseByDefault ? 'none' : 'block'};">
@@ -412,16 +426,18 @@ function createTitleElement(title) {
 function toggleTitle(titleNumber) {
     const content = document.getElementById(`title-${titleNumber}-content`);
     const icon = document.getElementById(`title-${titleNumber}-icon`);
-    const summary = document.getElementById(`title-${titleNumber}-summary`);
     const titleSection = document.querySelector(`[data-title-number="${titleNumber}"]`);
     
-    if (!content || !icon || !summary || !titleSection) {
+    if (!content || !icon || !titleSection) {
         console.error('Could not find title elements for', titleNumber);
         return;
     }
     
     const header = titleSection.querySelector('.title-header');
-    const titleInfo = titleSection.querySelector('.title-info');
+    const movieNameBox = titleSection.querySelector('.movie-name-box');
+    const summaryInfo = titleSection.querySelector('.title-summary-info');
+    const basicInfo = titleSection.querySelector('.title-basic-info');
+    const contentSuggestion = basicInfo.querySelector('.content-suggestion');
     
     if (content.style.display === 'none' || content.classList.contains('collapsed')) {
         // Expand
@@ -430,8 +446,16 @@ function toggleTitle(titleNumber) {
         icon.textContent = '▼';
         icon.classList.remove('collapsed');
         if (header) header.classList.remove('collapsed');
-        summary.style.display = 'none';
-        if (titleInfo) titleInfo.style.display = 'flex';
+        
+        // Hide collapsed elements, show expanded elements
+        if (movieNameBox) movieNameBox.style.display = 'none';
+        if (contentSuggestion) contentSuggestion.style.display = 'inline-block';
+        
+        // Update summary info to show only duration (no track counts in expanded state)
+        const duration = titleSection.dataset.duration || '';
+        if (summaryInfo) {
+            summaryInfo.innerHTML = duration ? `<span class="duration-display">${duration}</span>` : '';
+        }
     } else {
         // Collapse
         content.style.display = 'none';
@@ -439,9 +463,42 @@ function toggleTitle(titleNumber) {
         icon.textContent = '▶';
         icon.classList.add('collapsed');
         if (header) header.classList.add('collapsed');
-        summary.style.display = 'flex';
-        if (titleInfo) titleInfo.style.display = 'none';
+        
+        // Show collapsed elements, hide expanded elements
+        const movieName = document.getElementById(`title-${titleNumber}-name`).value;
+        if (movieNameBox) {
+            movieNameBox.textContent = movieName || '';
+            movieNameBox.style.display = movieName ? 'block' : 'none';
+        }
+        if (contentSuggestion) {
+            contentSuggestion.style.display = movieName ? 'none' : 'inline-block';
+        }
+        
+        // Update track counts and duration for collapsed state
+        updateCollapsedSummary(titleNumber);
     }
+}
+
+// Update collapsed summary information
+function updateCollapsedSummary(titleNumber) {
+    const summaryInfo = document.querySelector(`[data-title-number="${titleNumber}"] .title-summary-info`);
+    if (!summaryInfo) return;
+    
+    // Count selected tracks
+    const audioCheckboxes = document.querySelectorAll(`input[id^="audio-${titleNumber}-"]:checked`);
+    const subtitleCheckboxes = document.querySelectorAll(`input[id^="subtitle-${titleNumber}-"]:checked`);
+    const audioCount = audioCheckboxes.length;
+    const subtitleCount = subtitleCheckboxes.length;
+    
+    // Get duration from the title data
+    const titleSection = document.querySelector(`[data-title-number="${titleNumber}"]`);
+    const duration = titleSection.dataset.duration || '';
+    
+    summaryInfo.innerHTML = `
+        ${audioCount > 0 ? `<span class="track-count">🔊 ${audioCount}</span>` : ''}
+        ${subtitleCount > 0 ? `<span class="track-count">💬 ${subtitleCount}</span>` : ''}
+        ${duration ? `<span class="duration-display">${duration}</span>` : ''}
+    `;
 }
 
 // Toggle track checkbox
@@ -456,35 +513,29 @@ function toggleTrack(trackId) {
 
 // Update title summary
 function updateTitleSummary(titleNumber) {
-    const summaryElement = document.getElementById(`title-${titleNumber}-summary`);
-    if (!summaryElement) return;
+    const titleSection = document.querySelector(`[data-title-number="${titleNumber}"]`);
+    if (!titleSection) return;
     
-    // Get current values
+    const movieNameBox = titleSection.querySelector('.movie-name-box');
     const movieName = document.getElementById(`title-${titleNumber}-name`).value || '';
-    const year = document.getElementById(`title-${titleNumber}-date`).value || '';
-    const duration = summaryElement.closest('.title-section').querySelector('.duration')?.textContent || '';
     
-    // Count selected tracks
-    const audioCheckboxes = document.querySelectorAll(`input[id^="audio-${titleNumber}-"]:checked`);
-    const subtitleCheckboxes = document.querySelectorAll(`input[id^="subtitle-${titleNumber}-"]:checked`);
-    const audioCount = audioCheckboxes.length;
-    const subtitleCount = subtitleCheckboxes.length;
-    
-    // Build summary
-    let summary = `Title ${titleNumber}`;
-    if (movieName) {
-        summary += `   ${movieName}`;
-        if (year) {
-            summary += ` (${year})`;
+    // Update movie name box if it exists (collapsed state)
+    if (movieNameBox) {
+        movieNameBox.textContent = movieName;
+        movieNameBox.style.display = movieName ? 'block' : 'none';
+        
+        // Show/hide content suggestion based on movie name
+        const suggestion = titleSection.querySelector('.content-suggestion');
+        if (suggestion) {
+            suggestion.style.display = movieName ? 'none' : 'inline-block';
         }
     }
     
-    summaryElement.innerHTML = `
-        <span>${summary}</span>
-        ${audioCount > 0 ? `<span class="track-count">🔊 ${audioCount}</span>` : ''}
-        ${subtitleCount > 0 ? `<span class="track-count">💬 ${subtitleCount}</span>` : ''}
-        ${duration ? `<span>${duration}</span>` : ''}
-    `;
+    // Update collapsed summary if in collapsed state
+    const content = document.getElementById(`title-${titleNumber}-content`);
+    if (content && content.classList.contains('collapsed')) {
+        updateCollapsedSummary(titleNumber);
+    }
     
     // Update file list status based on whether title is "filled in"
     updateFileListStatus();
