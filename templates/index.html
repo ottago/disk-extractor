@@ -41,18 +41,19 @@
             <div id="metadataForm" style="display: none;">
                 <div class="file-info-section">
                     <h2 id="currentFileName">No file selected</h2>
-                    <div class="file-details">
-                        <span id="currentFileSize"></span>
+                    <div class="file-actions-row">
+                        <div class="file-size">
+                            <span id="currentFileSize"></span>
+                        </div>
+                        <div class="action-buttons">
+                            <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">
+                                🔍 Scan Media
+                            </button>
+                            <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">
+                                📄 Raw Output
+                            </button>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="action-buttons">
-                    <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">
-                        🔍 Scan with HandBrake
-                    </button>
-                    <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">
-                        📄 View Raw Output
-                    </button>
                 </div>
                 
                 <div id="enhancedMetadata" class="enhanced-metadata">

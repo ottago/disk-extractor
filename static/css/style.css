@@ -35,7 +35,6 @@ body {
 /* Container */
 .container {
     display: flex;
-    max-width: 1400px;
     margin: 0 auto;
     min-height: calc(100vh - 120px);
     gap: 1rem;
@@ -58,7 +57,7 @@ body {
 }
 
 .file-item {
-    padding: 1rem;
+    padding: 0.5rem;
     border-bottom: 1px solid #eee;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -87,7 +86,7 @@ body {
 }
 
 .file-info {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #666;
 }
 
@@ -130,7 +129,7 @@ body {
 
 /* File info section */
 .file-info-section {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid #eee;
 }
@@ -145,16 +144,29 @@ body {
     font-size: 0.9rem;
 }
 
+/* File actions row */
+.file-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+}
+
+.file-size {
+    font-size: 0.9rem;
+    color: #666;
+    text-align: left;
+}
+
 /* Action buttons */
 .action-buttons {
-    margin-bottom: 2rem;
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
 }
 
 .action-button {
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem;
     border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -227,7 +239,7 @@ body {
 }
 
 .title-header {
-    padding: 1rem;
+    padding: 0.4rem;
     cursor: pointer;
     user-select: none;
     display: flex;
@@ -249,6 +261,7 @@ body {
 
 .title-checkbox {
     flex-shrink: 0;
+    padding-left: 0.8rem;
 }
 
 .title-info {
@@ -275,6 +288,7 @@ body {
 
 .expand-icon {
     flex-shrink: 0;
+    padding-right: 1rem;
     transition: transform 0.2s;
     font-size: 1.2rem;
     color: #666;
@@ -285,7 +299,7 @@ body {
 }
 
 .title-content {
-    padding: 1rem;
+    padding: 0.8rem;
     display: block;
 }
 
@@ -295,12 +309,12 @@ body {
 
 /* Form elements */
 .form-group {
-    margin-bottom: 1rem;
+    margin-bottom: 0.3rem;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.1rem;
     font-weight: 500;
     color: #555;
 }
@@ -308,7 +322,7 @@ body {
 .form-group input,
 .form-group textarea {
     width: 100%;
-    padding: 0.75rem;
+    padding: 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 0.9rem;
@@ -347,11 +361,11 @@ body {
 
 /* Tracks section */
 .tracks-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .tracks-section h4 {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.1rem;
     color: #555;
 }
 
@@ -502,12 +516,22 @@ body {
         padding: 1rem;
     }
     
-    .action-buttons {
+    .file-actions-row {
         flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .file-size {
+        align-self: flex-start;
+    }
+    
+    .action-buttons {
+        align-self: flex-end;
+        flex-direction: row;
     }
     
     .action-button {
-        width: 100%;
-        justify-content: center;
+        padding: 0.75rem 1.5rem;
     }
 }
