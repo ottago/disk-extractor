@@ -3,6 +3,25 @@ let currentMovies = [];
 let selectedFile = null;
 let enhancedMetadata = null;
 
+// Security: HTML escaping function to prevent XSS
+function escapeHtml(text) {
+    if (typeof text !== 'string') {
+        return '';
+    }
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Security: Sanitize filename for display
+function sanitizeFilename(filename) {
+    if (typeof filename !== 'string') {
+        return '';
+    }
+    // Remove any potentially dangerous characters and limit length
+    return filename.replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').substring(0, 255);
+}
+
 // Initialize the application
 function initializeApp(movies) {
     currentMovies = movies;
@@ -95,22 +114,34 @@ function hideTitlesLoading() {
 // File selection
 function selectFile(filename) {
     console.log('selectFile called for:', filename);
-    selectedFile = filename;
+    
+    // Sanitize filename for security
+    const safeFilename = sanitizeFilename(filename);
+    if (!safeFilename) {
+        console.error('Invalid filename provided:', filename);
+        return;
+    }
+    
+    selectedFile = safeFilename;
     
     // Update UI
     document.querySelectorAll('.file-item').forEach(item => {
         item.classList.remove('active');
     });
-    document.querySelector(`[data-filename="${filename}"]`).classList.add('active');
+    
+    const fileItem = document.querySelector(`[data-filename="${CSS.escape(safeFilename)}"]`);
+    if (fileItem) {
+        fileItem.classList.add('active');
+    }
     
     // Find movie data
-    const movie = currentMovies.find(m => m.file_name === filename);
+    const movie = currentMovies.find(m => m.file_name === safeFilename);
     if (!movie) {
-        console.error('Movie not found:', filename);
+        console.error('Movie not found:', safeFilename);
         return;
     }
     
-    // Show basic file info
+    // Show basic file info (safely escaped)
     document.getElementById('currentFileName').textContent = movie.file_name;
     document.getElementById('currentFileSize').textContent = movie.size_mb ? `${movie.size_mb} MB` : '';
     
@@ -124,11 +155,11 @@ function selectFile(filename) {
     document.getElementById('rawOutputButton').style.display = 'none';
     
     // Show loading indicator while fetching data
-    console.log('Showing loading indicator for:', filename);
+    console.log('Showing loading indicator for:', safeFilename);
     showTitlesLoading();
     
     // Try to load cached enhanced metadata for THIS specific file
-    loadEnhancedMetadata(filename);
+    loadEnhancedMetadata(safeFilename);
 }
 
 // Load enhanced metadata
@@ -351,27 +382,34 @@ function createTitleElement(title) {
     
     // Helper function to create title summary
     function createTitleSummary() {
-        const movieName = title.movie_name || '';
+        const movieName = escapeHtml(title.movie_name || '');
         const year = getYear(title.release_date);
         const audioCount = title.selected_audio_tracks.length;
         const subtitleCount = title.selected_subtitle_tracks.length;
-        const duration = title.duration || '';
+        const duration = escapeHtml(title.duration || '');
         
         let summary = `Title ${title.title_number}`;
         if (movieName) {
             summary += `   ${movieName}`;
             if (year) {
-                summary += ` (${year})`;
+                summary += ` (${escapeHtml(year)})`;
             }
         }
         
         return `
-            <span>${summary}</span>
+            <span>${escapeHtml(summary)}</span>
             ${audioCount > 0 ? `<span class="track-count">🔊 ${audioCount}</span>` : ''}
             ${subtitleCount > 0 ? `<span class="track-count">💬 ${subtitleCount}</span>` : ''}
             ${duration ? `<span>${duration}</span>` : ''}
         `;
     }
+    
+    // Safely escape values for HTML attributes and content
+    const safeMovieName = escapeHtml(title.movie_name || '');
+    const safeSynopsis = escapeHtml(title.synopsis || '');
+    const safeYear = escapeHtml(getYear(title.release_date));
+    const safeDuration = escapeHtml(title.duration || '');
+    const safeSuggestedText = escapeHtml(suggestedText);
     
     titleDiv.innerHTML = `
         <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''}" onclick="toggleTitle(${title.title_number})">
@@ -384,11 +422,11 @@ function createTitleElement(title) {
             
             <div class="title-basic-info">
                 <span class="title-number">Title ${title.title_number}</span>
-                <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${suggestedText}</span>
+                <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${safeSuggestedText}</span>
             </div>
             
             <div class="movie-name-box" style="display: ${shouldCollapseByDefault && title.movie_name ? 'block' : 'none'};">
-                ${title.movie_name || ''}
+                ${safeMovieName}
             </div>
             
             <div class="title-spacer"></div>
@@ -396,7 +434,7 @@ function createTitleElement(title) {
             <div class="title-summary-info">
                 ${shouldCollapseByDefault && title.selected_audio_tracks.length > 0 ? `<span class="track-count">🔊 ${title.selected_audio_tracks.length}</span>` : ''}
                 ${shouldCollapseByDefault && title.selected_subtitle_tracks.length > 0 ? `<span class="track-count">💬 ${title.selected_subtitle_tracks.length}</span>` : ''}
-                ${title.duration ? `<span class="duration-display">${title.duration}</span>` : ''}
+                ${safeDuration ? `<span class="duration-display">${safeDuration}</span>` : ''}
             </div>
             
             <div class="expand-icon ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-icon">
@@ -409,7 +447,7 @@ function createTitleElement(title) {
                 <label for="title-${title.title_number}-name">Movie Name:</label>
                 <input type="text" 
                        id="title-${title.title_number}-name" 
-                       value="${title.movie_name || ''}"
+                       value="${safeMovieName}"
                        onchange="saveMetadata(); updateTitleSummary(${title.title_number});">
             </div>
             
@@ -417,7 +455,7 @@ function createTitleElement(title) {
                 <label for="title-${title.title_number}-date">Release Year:</label>
                 <input type="text" 
                        id="title-${title.title_number}-date" 
-                       value="${getYear(title.release_date)}"
+                       value="${safeYear}"
                        placeholder="YYYY"
                        maxlength="4"
                        onchange="saveMetadata(); updateTitleSummary(${title.title_number});">
@@ -427,7 +465,7 @@ function createTitleElement(title) {
                 <label for="title-${title.title_number}-synopsis">Synopsis:</label>
                 <textarea id="title-${title.title_number}-synopsis" 
                           rows="3"
-                          onchange="saveMetadata()">${title.synopsis || ''}</textarea>
+                          onchange="saveMetadata()">${safeSynopsis}</textarea>
             </div>
             
             <div class="tracks-container">
@@ -438,6 +476,8 @@ function createTitleElement(title) {
                             const suggestion = title.suggestions.audio[index];
                             const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
                             const isChecked = title.selected_audio_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                            const safeLanguageName = escapeHtml(suggestion ? suggestion.language_name : 'Unknown');
+                            const safeDescription = escapeHtml(track.Description || '');
                             return `
                                 <div class="track-item ${suggestedClass}" onclick="toggleTrack('audio-${title.title_number}-${track.TrackNumber}')">
                                     <input type="checkbox" 
@@ -445,8 +485,8 @@ function createTitleElement(title) {
                                            ${isChecked}
                                            onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
                                     <div class="track-info">
-                                        <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
-                                        <div class="track-details">${track.Description || ''}</div>
+                                        <div class="track-language">${safeLanguageName}</div>
+                                        <div class="track-details">${safeDescription}</div>
                                     </div>
                                 </div>
                             `;
@@ -461,6 +501,8 @@ function createTitleElement(title) {
                             const suggestion = title.suggestions.subtitles[index];
                             const suggestedClass = suggestion && suggestion.suggested ? 'suggested' : '';
                             const isChecked = title.selected_subtitle_tracks.includes(track.TrackNumber) ? 'checked' : '';
+                            const safeLanguageName = escapeHtml(suggestion ? suggestion.language_name : 'Unknown');
+                            const safeName = escapeHtml(track.Name || '');
                             return `
                                 <div class="track-item ${suggestedClass}" onclick="toggleTrack('subtitle-${title.title_number}-${track.TrackNumber}')">
                                     <input type="checkbox" 
@@ -468,8 +510,8 @@ function createTitleElement(title) {
                                            ${isChecked}
                                            onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
                                     <div class="track-info">
-                                        <div class="track-language">${suggestion ? suggestion.language_name : 'Unknown'}</div>
-                                        <div class="track-details">${track.Name || ''}</div>
+                                        <div class="track-language">${safeLanguageName}</div>
+                                        <div class="track-details">${safeName}</div>
                                     </div>
                                 </div>
                             `;
@@ -578,11 +620,12 @@ function updateTitleSummary(titleNumber) {
     if (!titleSection) return;
     
     const movieNameBox = titleSection.querySelector('.movie-name-box');
-    const movieName = document.getElementById(`title-${titleNumber}-name`).value || '';
+    const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
+    const movieName = movieNameInput ? movieNameInput.value || '' : '';
     
-    // Update movie name box if it exists (collapsed state)
+    // Update movie name box if it exists (collapsed state) - safely escaped
     if (movieNameBox) {
-        movieNameBox.textContent = movieName;
+        movieNameBox.textContent = movieName; // textContent automatically escapes
         movieNameBox.style.display = movieName ? 'block' : 'none';
         
         // Show/hide content suggestion based on movie name
@@ -723,35 +766,47 @@ function showRawOutput() {
                 const modal = document.getElementById('rawOutputModal');
                 const content = document.getElementById('rawOutputContent');
                 
+                // Safely escape all user-controlled content to prevent XSS
+                const safeFilename = escapeHtml(data.filename || 'Unknown');
+                const safeTimestamp = escapeHtml(data.raw_output.scan_timestamp || 'Unknown');
+                const safeCommand = escapeHtml(data.raw_output.command || 'Unknown');
+                const safeExitCode = escapeHtml(String(data.raw_output.exit_code !== undefined ? data.raw_output.exit_code : 'Unknown'));
+                const safeStdout = escapeHtml(data.raw_output.stdout || 'No output');
+                const safeStderr = escapeHtml(data.raw_output.stderr || 'No errors');
+                
                 content.innerHTML = `
                     <div class="raw-output-section">
                         <h3>File Information</h3>
                         <div class="file-info-content">
-                            <div><strong>File:</strong> ${data.filename}</div>
-                            <div><strong>Scan Time:</strong> ${data.raw_output.scan_timestamp || 'Unknown'}</div>
-                            <div><strong>Command:</strong> ${data.raw_output.command || 'Unknown'}</div>
-                            <div><strong>Exit Code:</strong> ${data.raw_output.exit_code !== undefined ? data.raw_output.exit_code : 'Unknown'}</div>
+                            <div><strong>File:</strong> ${safeFilename}</div>
+                            <div><strong>Scan Time:</strong> ${safeTimestamp}</div>
+                            <div><strong>Command:</strong> ${safeCommand}</div>
+                            <div><strong>Exit Code:</strong> ${safeExitCode}</div>
                         </div>
                     </div>
                     
                     <div class="raw-output-section">
                         <h3>Standard Output</h3>
-                        <div class="raw-output-content">${data.raw_output.stdout || 'No output'}</div>
+                        <div class="raw-output-content">${safeStdout}</div>
                     </div>
                     
                     <div class="raw-output-section">
                         <h3>Standard Error</h3>
-                        <div class="raw-output-content">${data.raw_output.stderr || 'No errors'}</div>
+                        <div class="raw-output-content">${safeStderr}</div>
                     </div>
                 `;
                 
                 modal.style.display = 'block';
             } else {
-                alert(data.message || 'No raw output available');
+                // Safely display error message
+                const safeMessage = escapeHtml(data.message || 'No raw output available');
+                alert(safeMessage);
             }
         })
         .catch(error => {
-            alert('Error loading raw output: ' + error.message);
+            // Safely display error message
+            const safeError = escapeHtml(error.message || 'Unknown error');
+            alert('Error loading raw output: ' + safeError);
         });
 }
 

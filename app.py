@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+from urllib.parse import unquote
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +25,79 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Security: Add security headers to all responses
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    # Prevent XSS attacks
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # Content Security Policy to prevent XSS
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "  # Allow inline scripts for now
+        "style-src 'self' 'unsafe-inline'; "   # Allow inline styles
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "font-src 'self'; "
+        "object-src 'none'; "
+        "media-src 'self'; "
+        "frame-src 'none';"
+    )
+    
+    # Prevent caching of sensitive data
+    if request.endpoint and request.endpoint.startswith('api'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    
+    return response
+
+def validate_filename(filename):
+    """
+    Validate filename to prevent path traversal and ensure it's a valid .img file
+    
+    Args:
+        filename (str): The filename to validate
+        
+    Returns:
+        str: The validated filename
+        
+    Raises:
+        ValueError: If filename is invalid or potentially malicious
+    """
+    if not filename:
+        raise ValueError("Filename cannot be empty")
+    
+    # URL decode the filename first
+    filename = unquote(filename)
+    
+    # Check for path traversal attempts
+    if '..' in filename or '/' in filename or '\\' in filename:
+        raise ValueError("Invalid filename: path traversal detected")
+    
+    # Check for null bytes (another common attack vector)
+    if '\x00' in filename:
+        raise ValueError("Invalid filename: null byte detected")
+    
+    # Ensure it's a valid .img file
+    if not filename.lower().endswith('.img'):
+        raise ValueError("Invalid filename: only .img files are allowed")
+    
+    # Check filename length (reasonable limit)
+    if len(filename) > 255:
+        raise ValueError("Invalid filename: filename too long")
+    
+    # Check for valid characters (alphanumeric, spaces, hyphens, underscores, dots)
+    import string
+    allowed_chars = string.ascii_letters + string.digits + ' -_.()[]'
+    if not all(c in allowed_chars for c in filename[:-4]):  # Exclude .img extension from check
+        raise ValueError("Invalid filename: contains invalid characters")
+    
+    return filename
 
 def safe_decode_subprocess_output(output_bytes):
     """Safely decode subprocess output, handling various encodings"""
@@ -82,7 +156,27 @@ class HandBrakeScanner:
     @staticmethod
     def scan_file(file_path):
         """Scan a media file using HandBrake CLI"""
-        filename = os.path.basename(file_path)
+        # Validate and sanitize file path
+        try:
+            file_path = Path(file_path).resolve()
+            if not file_path.exists():
+                raise FileNotFoundError(f"File not found: {file_path}")
+            
+            if not file_path.is_file():
+                raise ValueError(f"Path is not a file: {file_path}")
+            
+            # Ensure it's actually an .img file
+            if not str(file_path).lower().endswith('.img'):
+                raise ValueError(f"File is not an .img file: {file_path}")
+            
+            # Convert back to string for subprocess
+            file_path_str = str(file_path)
+            
+        except (OSError, ValueError) as e:
+            logger.error(f"Invalid file path: {e}")
+            raise
+        
+        filename = file_path.name
         logger.info(f"Starting HandBrake scan for: {filename}")
         
         try:
@@ -92,20 +186,15 @@ class HandBrakeScanner:
                 logger.error(error_msg)
                 raise FileNotFoundError(error_msg)
             
-            # Check if file exists and is readable
-            if not os.path.exists(file_path):
-                error_msg = f"File not found: {file_path}"
-                logger.error(error_msg)
-                raise FileNotFoundError(error_msg)
-            
-            if not os.access(file_path, os.R_OK):
-                error_msg = f"File not readable: {file_path}"
+            # Check if file is readable
+            if not os.access(file_path_str, os.R_OK):
+                error_msg = f"File not readable: {file_path_str}"
                 logger.error(error_msg)
                 raise PermissionError(error_msg)
             
-            # Run HandBrake CLI scan
-            cmd = ['/usr/local/bin/HandBrakeCLI', '--scan', '--title', '0', '--json', '--input', file_path]
-            logger.info(f"Running HandBrake command: {' '.join(cmd)}")
+            # Run HandBrake CLI scan - using validated file path
+            cmd = ['/usr/local/bin/HandBrakeCLI', '--scan', '--title', '0', '--json', '--input', file_path_str]
+            logger.info(f"Running HandBrake command for: {filename}")
             
             # Use binary output to avoid UTF-8 decode errors
             result = subprocess.run(cmd, capture_output=True, text=False, timeout=120)
@@ -603,6 +692,18 @@ class MovieMetadataManager:
     
     def get_enhanced_metadata(self, img_file):
         """Get complete metadata including HandBrake scan data and suggestions"""
+        # Validate filename
+        try:
+            img_file = validate_filename(img_file)
+        except ValueError as e:
+            logger.error(f"Invalid filename in get_enhanced_metadata: {img_file} - {e}")
+            raise
+        
+        # Ensure the file exists in our directory
+        file_path = self.directory / img_file
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {img_file}")
+        
         metadata = self.load_metadata(img_file)
         handbrake_data = self.get_handbrake_data(img_file)
         
@@ -693,18 +794,48 @@ def setup():
 @app.route('/api/save_metadata', methods=['POST'])
 def save_metadata():
     """Save metadata for a file"""
-    data = request.get_json()
-    filename = data.get('filename')
-    metadata = {
-        'movie_name': data.get('movie_name', ''),
-        'release_date': data.get('release_date', ''),
-        'synopsis': data.get('synopsis', ''),
-        'file_name': filename,
-        'titles': data.get('titles', [])
-    }
-    
-    success = manager.save_metadata(filename, metadata)
-    return jsonify({'success': success})
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'})
+        
+        filename = data.get('filename')
+        if not filename:
+            return jsonify({'success': False, 'error': 'Filename is required'})
+        
+        # Validate filename for security
+        try:
+            filename = validate_filename(filename)
+        except ValueError as e:
+            logger.warning(f"Invalid filename rejected: {filename} - {e}")
+            return jsonify({'success': False, 'error': f'Invalid filename: {e}'})
+        
+        # Validate metadata structure
+        titles = data.get('titles', [])
+        if not isinstance(titles, list):
+            return jsonify({'success': False, 'error': 'Titles must be a list'})
+        
+        # Sanitize string inputs
+        def sanitize_string(value, max_length=1000):
+            if not isinstance(value, str):
+                return ''
+            # Remove null bytes and limit length
+            return value.replace('\x00', '').strip()[:max_length]
+        
+        metadata = {
+            'movie_name': sanitize_string(data.get('movie_name', '')),
+            'release_date': sanitize_string(data.get('release_date', ''), 10),  # YYYY-MM-DD format
+            'synopsis': sanitize_string(data.get('synopsis', ''), 5000),  # Longer limit for synopsis
+            'file_name': filename,
+            'titles': titles  # Will be validated by the manager
+        }
+        
+        success = manager.save_metadata(filename, metadata)
+        return jsonify({'success': success})
+        
+    except Exception as e:
+        logger.error(f"Error in save_metadata endpoint: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'})
 
 @app.route('/api/file_list')
 def file_list():
@@ -719,6 +850,13 @@ def api_scan_file(filename):
         return jsonify({'success': False, 'error': 'No directory configured'})
     
     try:
+        # Validate filename for security
+        try:
+            filename = validate_filename(filename)
+        except ValueError as e:
+            logger.warning(f"Invalid filename rejected in scan_file: {filename} - {e}")
+            return jsonify({'success': False, 'error': f'Invalid filename: {e}'})
+        
         # Clear cache to force rescan
         if filename in manager.handbrake_cache:
             del manager.handbrake_cache[filename]
@@ -729,11 +867,25 @@ def api_scan_file(filename):
             'metadata': enhanced_metadata,
             'filename': filename
         })
+    except FileNotFoundError:
+        logger.error(f"File not found: {filename}")
+        return jsonify({
+            'success': False, 
+            'error': 'File not found',
+            'filename': filename
+        })
+    except PermissionError:
+        logger.error(f"Permission denied: {filename}")
+        return jsonify({
+            'success': False, 
+            'error': 'Permission denied',
+            'filename': filename
+        })
     except Exception as e:
         logger.error(f"Error scanning {filename}: {e}")
         return jsonify({
             'success': False, 
-            'error': str(e),
+            'error': 'Internal server error',
             'filename': filename
         })
 
@@ -744,17 +896,38 @@ def api_enhanced_metadata(filename):
         return jsonify({'success': False, 'error': 'No directory configured'})
     
     try:
+        # Validate filename for security
+        try:
+            filename = validate_filename(filename)
+        except ValueError as e:
+            logger.warning(f"Invalid filename rejected in enhanced_metadata: {filename} - {e}")
+            return jsonify({'success': False, 'error': f'Invalid filename: {e}'})
+        
         enhanced_metadata = manager.get_enhanced_metadata(filename)
         return jsonify({
             'success': True, 
             'metadata': enhanced_metadata,
             'filename': filename
         })
+    except FileNotFoundError:
+        logger.error(f"File not found: {filename}")
+        return jsonify({
+            'success': False, 
+            'error': 'File not found',
+            'filename': filename
+        })
+    except PermissionError:
+        logger.error(f"Permission denied: {filename}")
+        return jsonify({
+            'success': False, 
+            'error': 'Permission denied',
+            'filename': filename
+        })
     except Exception as e:
         logger.error(f"Error getting metadata for {filename}: {e}")
         return jsonify({
             'success': False, 
-            'error': str(e),
+            'error': 'Internal server error',
             'filename': filename
         })
 
@@ -785,6 +958,13 @@ def api_raw_output(filename):
         return jsonify({'success': False, 'error': 'No directory configured'})
     
     try:
+        # Validate filename for security
+        try:
+            filename = validate_filename(filename)
+        except ValueError as e:
+            logger.warning(f"Invalid filename rejected in raw_output: {filename} - {e}")
+            return jsonify({'success': False, 'error': f'Invalid filename: {e}'})
+        
         # Check if we have cached HandBrake data for this file
         if filename in manager.handbrake_cache:
             cached_data = manager.handbrake_cache[filename]
@@ -813,9 +993,10 @@ def api_raw_output(filename):
             })
             
     except Exception as e:
+        logger.error(f"Error getting raw output for {filename}: {e}")
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'filename': filename
         })
 
