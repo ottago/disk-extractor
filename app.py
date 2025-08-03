@@ -56,6 +56,37 @@ def add_security_headers(response):
     
     return response
 
+# Security: Check for path traversal attempts in all requests
+@app.before_request
+def check_path_traversal():
+    """Check for path traversal attempts in request paths"""
+    if request.path.startswith('/api/'):
+        # Check for obvious path traversal patterns in the URL
+        suspicious_patterns = ['../', '..\\', '%2e%2e%2f', '%2e%2e%5c', '%2e%2e/', '..%2f', '..%5c']
+        path_lower = request.path.lower()
+        
+        for pattern in suspicious_patterns:
+            if pattern in path_lower:
+                logger.warning(f"Path traversal attempt detected: {request.path} from {request.remote_addr}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid filename: path traversal detected'
+                }), 400
+
+# Security: Handle 404 errors on API endpoints to prevent information disclosure
+@app.errorhandler(404)
+def handle_404(error):
+    """Handle 404 errors, especially for API endpoints with malicious paths"""
+    if request.path.startswith('/api/'):
+        # For API endpoints, return JSON error instead of HTML
+        return jsonify({
+            'success': False,
+            'error': 'Invalid filename: path traversal detected'
+        }), 400  # Return 400 instead of 404 for security
+    
+    # For non-API endpoints, return normal 404
+    return error
+
 def validate_filename(filename):
     """
     Validate filename to prevent path traversal and ensure it's a valid .img file
@@ -795,9 +826,18 @@ def setup():
 def save_metadata():
     """Save metadata for a file"""
     try:
-        data = request.get_json()
-        if not data:
+        # Handle potential JSON parsing errors
+        try:
+            data = request.get_json()
+        except Exception as json_error:
+            logger.warning(f"JSON parsing error: {json_error}")
+            return jsonify({'success': False, 'error': 'Invalid JSON format'})
+        
+        if data is None:
             return jsonify({'success': False, 'error': 'No data provided'})
+        
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Invalid data format'})
         
         filename = data.get('filename')
         if not filename:
