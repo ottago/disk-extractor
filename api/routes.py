@@ -5,10 +5,12 @@ Contains all API endpoint handlers.
 """
 
 import logging
-from flask import Blueprint, request, jsonify
+from typing import Any
+from flask import Blueprint, request, jsonify, Response
 
 from utils.validation import validate_metadata_input, ValidationError
 from utils.security import log_security_event
+from models.metadata_manager import MovieMetadataManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +18,19 @@ logger = logging.getLogger(__name__)
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
-def init_api_routes(manager):
+def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
     """
     Initialize API routes with the metadata manager
     
     Args:
         manager: MovieMetadataManager instance
+        
+    Returns:
+        Configured API blueprint
     """
     
     @api_bp.route('/save_metadata', methods=['POST'])
-    def save_metadata():
+    def save_metadata() -> Response:
         """Save metadata for a file"""
         try:
             # Handle potential JSON parsing errors
@@ -56,7 +61,7 @@ def init_api_routes(manager):
             return jsonify({'success': False, 'error': 'Internal server error'})
     
     @api_bp.route('/file_list')
-    def file_list():
+    def file_list() -> Response:
         """Get updated file list with status"""
         try:
             manager.scan_directory()  # Refresh the list
@@ -66,7 +71,7 @@ def init_api_routes(manager):
             return jsonify({'success': False, 'error': 'Internal server error'})
     
     @api_bp.route('/scan_file/<filename>')
-    def scan_file(filename):
+    def scan_file(filename: str) -> Response:
         """API endpoint to trigger HandBrake scan for a specific file"""
         if not manager:
             return jsonify({'success': False, 'error': 'No directory configured'})
@@ -112,7 +117,7 @@ def init_api_routes(manager):
             })
     
     @api_bp.route('/enhanced_metadata/<filename>')
-    def enhanced_metadata(filename):
+    def enhanced_metadata(filename: str) -> Response:
         """API endpoint to get enhanced metadata for a file"""
         if not manager:
             return jsonify({'success': False, 'error': 'No directory configured'})
@@ -154,7 +159,7 @@ def init_api_routes(manager):
             })
     
     @api_bp.route('/raw_output/<filename>')
-    def raw_output(filename):
+    def raw_output(filename: str) -> Response:
         """API endpoint to get raw HandBrake output for a file"""
         if not manager:
             return jsonify({'success': False, 'error': 'No directory configured'})
@@ -207,7 +212,7 @@ def init_api_routes(manager):
             })
     
     @api_bp.route('/handbrake/test')
-    def test_handbrake():
+    def test_handbrake() -> Response:
         """Test HandBrake functionality"""
         try:
             available = manager.test_handbrake()

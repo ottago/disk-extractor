@@ -6,20 +6,22 @@ Provides security-related helper functions.
 
 import subprocess
 import logging
+from typing import Optional
+from flask import Response
 from config import SECURITY_HEADERS, API_CACHE_HEADERS
 
 logger = logging.getLogger(__name__)
 
 
-def safe_decode_subprocess_output(output_bytes):
+def safe_decode_subprocess_output(output_bytes: Optional[bytes]) -> str:
     """
     Safely decode subprocess output, handling various encodings
     
     Args:
-        output_bytes (bytes): Raw subprocess output
+        output_bytes: Raw subprocess output
         
     Returns:
-        str: Decoded string
+        Decoded string
     """
     if not output_bytes:
         return ""
@@ -35,13 +37,13 @@ def safe_decode_subprocess_output(output_bytes):
     return output_bytes.decode('utf-8', errors='replace')
 
 
-def apply_security_headers(response, is_api_endpoint=False):
+def apply_security_headers(response: Response, is_api_endpoint: bool = False) -> Response:
     """
     Apply security headers to Flask response
     
     Args:
         response: Flask response object
-        is_api_endpoint (bool): Whether this is an API endpoint
+        is_api_endpoint: Whether this is an API endpoint
         
     Returns:
         Flask response object with security headers
@@ -58,15 +60,15 @@ def apply_security_headers(response, is_api_endpoint=False):
     return response
 
 
-def check_path_traversal(path):
+def check_path_traversal(path: str) -> bool:
     """
     Check if a path contains path traversal attempts
     
     Args:
-        path (str): Path to check
+        path: Path to check
         
     Returns:
-        bool: True if path traversal detected
+        True if path traversal detected
     """
     if not path:
         return False
@@ -77,14 +79,14 @@ def check_path_traversal(path):
     return any(pattern in path_lower for pattern in suspicious_patterns)
 
 
-def log_security_event(event_type, details, remote_addr=None):
+def log_security_event(event_type: str, details: str, remote_addr: Optional[str] = None) -> None:
     """
     Log security-related events
     
     Args:
-        event_type (str): Type of security event
-        details (str): Event details
-        remote_addr (str, optional): Remote IP address
+        event_type: Type of security event
+        details: Event details
+        remote_addr: Remote IP address
     """
     log_msg = f"SECURITY: {event_type} - {details}"
     if remote_addr:

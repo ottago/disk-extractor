@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from cachetools import TTLCache
+from typing import Dict, List, Any, Optional, Union
 
 from config import Config
 from models.handbrake_scanner import HandBrakeScanner, HandBrakeError
@@ -27,27 +28,27 @@ class MetadataError(Exception):
 class MovieMetadataManager:
     """Manages movie metadata and HandBrake integration"""
     
-    def __init__(self, directory=None):
+    def __init__(self, directory: Optional[Union[str, Path]] = None) -> None:
         """
         Initialize the metadata manager
         
         Args:
-            directory (str or Path, optional): Directory containing movie files
+            directory: Directory containing movie files
         """
-        self.directory = None
-        self.movies = []
+        self.directory: Optional[Path] = None
+        self.movies: List[Dict[str, Any]] = []
         # Use TTL cache with size limit for HandBrake results
-        self.handbrake_cache = TTLCache(maxsize=Config.MAX_CACHE_SIZE, ttl=Config.CACHE_TTL)
+        self.handbrake_cache: TTLCache = TTLCache(maxsize=Config.MAX_CACHE_SIZE, ttl=Config.CACHE_TTL)
         
         if directory:
             self.set_directory(directory)
     
-    def set_directory(self, directory):
+    def set_directory(self, directory: Union[str, Path]) -> None:
         """
         Set the working directory and scan for movies
         
         Args:
-            directory (str or Path): Directory containing movie files
+            directory: Directory containing movie files
             
         Raises:
             MetadataError: If directory is invalid
@@ -63,7 +64,7 @@ class MovieMetadataManager:
         
         self.scan_directory()
     
-    def scan_directory(self):
+    def scan_directory(self) -> None:
         """Scan directory for .img files and their metadata"""
         if not self.directory or not self.directory.exists():
             self.movies = []
@@ -97,20 +98,20 @@ class MovieMetadataManager:
         # Sort by filename
         self.movies.sort(key=lambda x: x['file_name'].lower())
     
-    def _load_file_metadata(self, img_file):
+    def _load_file_metadata(self, img_file: Path) -> Dict[str, Any]:
         """
         Load metadata for a single .img file
         
         Args:
-            img_file (Path): Path to the .img file
+            img_file: Path to the .img file
             
         Returns:
-            dict: File metadata
+            File metadata
         """
         metadata_file = img_file.with_suffix('.mmm')
         
         # Load metadata if it exists
-        metadata = {
+        metadata: Dict[str, Any] = {
             'file_name': img_file.name,
             'movie_name': img_file.stem,
             'release_date': '',
@@ -130,15 +131,15 @@ class MovieMetadataManager:
         metadata['has_metadata'] = self.has_meaningful_metadata(img_file.name)
         return metadata
     
-    def _get_file_size_mb(self, file_path):
+    def _get_file_size_mb(self, file_path: Path) -> Optional[float]:
         """
         Get file size in MB
         
         Args:
-            file_path (Path): Path to the file
+            file_path: Path to the file
             
         Returns:
-            float: File size in MB, or None if error
+            File size in MB, or None if error
         """
         try:
             size_bytes = file_path.stat().st_size
@@ -146,15 +147,15 @@ class MovieMetadataManager:
         except OSError:
             return None
     
-    def has_meaningful_metadata(self, img_file):
+    def has_meaningful_metadata(self, img_file: str) -> bool:
         """
         Check if a file has meaningful metadata (not just selected titles)
         
         Args:
-            img_file (str): Filename of the .img file
+            img_file: Filename of the .img file
             
         Returns:
-            bool: True if file has meaningful metadata
+            True if file has meaningful metadata
         """
         try:
             metadata = self.load_metadata(img_file)
@@ -168,15 +169,15 @@ class MovieMetadataManager:
         except Exception:
             return False
     
-    def get_handbrake_data(self, img_file):
+    def get_handbrake_data(self, img_file: str) -> Dict[str, Any]:
         """
         Get HandBrake scan data for a file, with caching
         
         Args:
-            img_file (str): Filename of the .img file
+            img_file: Filename of the .img file
             
         Returns:
-            dict: HandBrake scan data
+            HandBrake scan data
         """
         if img_file not in self.handbrake_cache:
             file_path = self.directory / img_file
@@ -188,7 +189,7 @@ class MovieMetadataManager:
                 logger.error(f"Failed to scan {img_file}: {e}")
                 
                 # Create error cache entry
-                error_cache = {
+                error_cache: Dict[str, Any] = {
                     'error': str(e),
                     'TitleList': []  # Empty list so other code doesn't break
                 }
@@ -219,15 +220,15 @@ class MovieMetadataManager:
         
         return self.handbrake_cache[img_file]
     
-    def format_duration(self, duration_dict):
+    def format_duration(self, duration_dict: Dict[str, int]) -> str:
         """
         Convert HandBrake duration dict to human readable format
         
         Args:
-            duration_dict (dict): HandBrake duration dictionary
+            duration_dict: HandBrake duration dictionary
             
         Returns:
-            str: Formatted duration string
+            Formatted duration string
         """
         hours = duration_dict.get('Hours', 0)
         minutes = duration_dict.get('Minutes', 0)
@@ -238,17 +239,17 @@ class MovieMetadataManager:
         else:
             return f"{minutes}:{seconds:02d}"
     
-    def get_title_suggestions(self, handbrake_data):
+    def get_title_suggestions(self, handbrake_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Generate smart suggestions for title selection
         
         Args:
-            handbrake_data (dict): HandBrake scan data
+            handbrake_data: HandBrake scan data
             
         Returns:
-            list: List of title suggestions
+            List of title suggestions
         """
-        suggestions = []
+        suggestions: List[Dict[str, Any]] = []
         
         for title in handbrake_data.get('TitleList', []):
             duration = title.get('Duration', {})
@@ -265,17 +266,17 @@ class MovieMetadataManager:
         
         return suggestions
     
-    def get_audio_suggestions(self, audio_list):
+    def get_audio_suggestions(self, audio_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Generate smart suggestions for audio track selection
         
         Args:
-            audio_list (list): List of audio tracks from HandBrake
+            audio_list: List of audio tracks from HandBrake
             
         Returns:
-            list: List of audio track suggestions
+            List of audio track suggestions
         """
-        suggestions = []
+        suggestions: List[Dict[str, Any]] = []
         
         for audio in audio_list:
             lang_code = audio.get('LanguageCode', '').lower()
@@ -292,7 +293,7 @@ class MovieMetadataManager:
             )
             
             # Build reason list with proper language names
-            reason = []
+            reason: List[str] = []
             
             # Add language name (always show the actual language)
             if language_name != 'Unknown':
@@ -316,17 +317,17 @@ class MovieMetadataManager:
         
         return suggestions
     
-    def get_subtitle_suggestions(self, subtitle_list):
+    def get_subtitle_suggestions(self, subtitle_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Generate smart suggestions for subtitle track selection
         
         Args:
-            subtitle_list (list): List of subtitle tracks from HandBrake
+            subtitle_list: List of subtitle tracks from HandBrake
             
         Returns:
-            list: List of subtitle track suggestions
+            List of subtitle track suggestions
         """
-        suggestions = []
+        suggestions: List[Dict[str, Any]] = []
         
         for subtitle in subtitle_list:
             lang_code = subtitle.get('LanguageCode', '').lower()
@@ -351,15 +352,15 @@ class MovieMetadataManager:
         
         return suggestions
     
-    def load_metadata(self, img_file):
+    def load_metadata(self, img_file: str) -> Dict[str, Any]:
         """
         Load metadata for the given .img file
         
         Args:
-            img_file (str): Filename of the .img file
+            img_file: Filename of the .img file
             
         Returns:
-            dict: File metadata
+            File metadata
             
         Raises:
             ValidationError: If filename is invalid
@@ -370,7 +371,7 @@ class MovieMetadataManager:
         mmm_path = self.directory / (Path(img_file).stem + '.mmm')
         
         # Get file size
-        file_size_mb = 0
+        file_size_mb: Optional[float] = 0
         try:
             img_path = self.directory / img_file
             file_size_mb = self._get_file_size_mb(img_path)
@@ -378,7 +379,7 @@ class MovieMetadataManager:
             pass
         
         # Default metadata structure
-        metadata = {
+        metadata: Dict[str, Any] = {
             'file_name': img_file,
             'size_mb': file_size_mb,
             'titles': []
@@ -409,16 +410,16 @@ class MovieMetadataManager:
         
         return metadata
     
-    def save_metadata(self, img_file, metadata):
+    def save_metadata(self, img_file: str, metadata: Dict[str, Any]) -> bool:
         """
         Save metadata to .mmm file
         
         Args:
-            img_file (str): Filename of the .img file
-            metadata (dict): Metadata to save
+            img_file: Filename of the .img file
+            metadata: Metadata to save
             
         Returns:
-            bool: True if successful
+            True if successful
             
         Raises:
             ValidationError: If filename is invalid
@@ -445,15 +446,15 @@ class MovieMetadataManager:
             logger.error(f"Could not save metadata for {img_file}: {e}")
             return False
     
-    def get_enhanced_metadata(self, img_file):
+    def get_enhanced_metadata(self, img_file: str) -> Dict[str, Any]:
         """
         Get complete metadata including HandBrake scan data and suggestions
         
         Args:
-            img_file (str): Filename of the .img file
+            img_file: Filename of the .img file
             
         Returns:
-            dict: Enhanced metadata with HandBrake data
+            Enhanced metadata with HandBrake data
             
         Raises:
             ValidationError: If filename is invalid
@@ -471,14 +472,14 @@ class MovieMetadataManager:
         handbrake_data = self.get_handbrake_data(img_file)
         
         # Enhance with HandBrake data and suggestions
-        enhanced_titles = []
+        enhanced_titles: List[Dict[str, Any]] = []
         title_suggestions = self.get_title_suggestions(handbrake_data)
         
         for title in handbrake_data.get('TitleList', []):
             title_index = title.get('Index', 0)
             
             # Find existing metadata for this title
-            existing_title = None
+            existing_title: Optional[Dict[str, Any]] = None
             for saved_title in metadata.get('titles', []):
                 if saved_title.get('title_number') == title_index:
                     existing_title = saved_title
@@ -489,7 +490,7 @@ class MovieMetadataManager:
             audio_suggestions = self.get_audio_suggestions(title.get('AudioList', []))
             subtitle_suggestions = self.get_subtitle_suggestions(title.get('SubtitleList', []))
             
-            enhanced_title = {
+            enhanced_title: Dict[str, Any] = {
                 'title_number': title_index,
                 'duration': self.format_duration(title.get('Duration', {})),
                 'video_info': {
@@ -523,25 +524,25 @@ class MovieMetadataManager:
             'scan_error': handbrake_data.get('error')
         }
     
-    def test_handbrake(self):
+    def test_handbrake(self) -> bool:
         """
         Test if HandBrake is available and working
         
         Returns:
-            bool: True if HandBrake is available
+            True if HandBrake is available
         """
         return HandBrakeScanner.test_availability()
     
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the HandBrake cache"""
         self.handbrake_cache.clear()
     
-    def get_cache_stats(self):
+    def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics
         
         Returns:
-            dict: Cache statistics
+            Cache statistics
         """
         return {
             'size': len(self.handbrake_cache),

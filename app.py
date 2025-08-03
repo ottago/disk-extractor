@@ -10,7 +10,8 @@ import os
 import sys
 import logging
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from typing import Optional, Union
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 
 # Import our modules
 from config import Config
@@ -34,14 +35,14 @@ manager = MovieMetadataManager()
 
 # Security middleware
 @app.after_request
-def add_security_headers(response):
+def add_security_headers(response: Response) -> Response:
     """Add security headers to all responses"""
     is_api_endpoint = request.endpoint and request.endpoint.startswith('api.')
     return apply_security_headers(response, is_api_endpoint)
 
 
 @app.before_request
-def check_security():
+def check_security() -> Optional[Response]:
     """Check for security issues in requests"""
     if request.path.startswith('/api/'):
         # Check for path traversal attempts
@@ -51,10 +52,11 @@ def check_security():
                 'success': False,
                 'error': 'Invalid filename: path traversal detected'
             }), 400
+    return None
 
 
 @app.errorhandler(404)
-def handle_404(error):
+def handle_404(error) -> Union[Response, tuple]:
     """Handle 404 errors, especially for API endpoints with malicious paths"""
     if request.path.startswith('/api/'):
         # For API endpoints, return JSON error instead of HTML
@@ -69,7 +71,7 @@ def handle_404(error):
 
 # Main routes
 @app.route('/')
-def index():
+def index() -> Union[str, Response]:
     """Main interface"""
     if not manager.directory:
         return redirect(url_for('setup'))
@@ -80,7 +82,7 @@ def index():
 
 
 @app.route('/setup', methods=['GET', 'POST'])
-def setup():
+def setup() -> str:
     """Directory selection page"""
     if request.method == 'POST':
         directory = request.form.get('directory', '').strip()
@@ -98,7 +100,7 @@ def setup():
 
 
 @app.route('/health')
-def health():
+def health() -> Union[Response, tuple]:
     """Health check endpoint"""
     try:
         handbrake_available = manager.test_handbrake()
@@ -124,15 +126,15 @@ def health():
         }), 500
 
 
-def create_app(directory=None):
+def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     """
     Application factory function
     
     Args:
-        directory (str, optional): Initial directory to use
+        directory: Initial directory to use
         
     Returns:
-        Flask: Configured Flask application
+        Configured Flask application
     """
     # Validate configuration
     try:
@@ -157,10 +159,10 @@ def create_app(directory=None):
     return app
 
 
-def main():
+def main() -> None:
     """Main entry point"""
     # Check for command line arguments
-    directory = None
+    directory: Optional[str] = None
     
     if len(sys.argv) > 1:
         if sys.argv[1] == '--help':

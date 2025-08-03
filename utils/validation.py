@@ -6,6 +6,7 @@ Provides secure validation functions for user inputs.
 
 import string
 from urllib.parse import unquote
+from typing import Dict, Any, Optional, Union
 from config import Config
 
 
@@ -14,15 +15,15 @@ class ValidationError(Exception):
     pass
 
 
-def validate_filename(filename):
+def validate_filename(filename: str) -> str:
     """
     Validate filename to prevent path traversal and ensure it's a valid .img file
     
     Args:
-        filename (str): The filename to validate
+        filename: The filename to validate
         
     Returns:
-        str: The validated filename
+        The validated filename
         
     Raises:
         ValidationError: If filename is invalid or potentially malicious
@@ -56,16 +57,16 @@ def validate_filename(filename):
     return filename
 
 
-def sanitize_string(value, max_length=None):
+def sanitize_string(value: Any, max_length: Optional[int] = None) -> str:
     """
     Sanitize string input by removing dangerous characters and limiting length
     
     Args:
         value: The value to sanitize
-        max_length (int, optional): Maximum allowed length
+        max_length: Maximum allowed length
         
     Returns:
-        str: Sanitized string
+        Sanitized string
     """
     if not isinstance(value, str):
         return ''
@@ -80,15 +81,15 @@ def sanitize_string(value, max_length=None):
     return sanitized
 
 
-def validate_metadata_input(data):
+def validate_metadata_input(data: Any) -> Dict[str, Any]:
     """
     Validate metadata input structure and content
     
     Args:
-        data (dict): The metadata to validate
+        data: The metadata to validate
         
     Returns:
-        dict: Validated and sanitized metadata
+        Validated and sanitized metadata
         
     Raises:
         ValidationError: If data is invalid
@@ -109,7 +110,7 @@ def validate_metadata_input(data):
         raise ValidationError("Titles must be a list")
     
     # Sanitize string fields
-    validated_data = {
+    validated_data: Dict[str, Any] = {
         'filename': filename,
         'file_name': filename,
         'movie_name': sanitize_string(data.get('movie_name', ''), Config.MAX_MOVIE_NAME_LENGTH),
@@ -121,15 +122,15 @@ def validate_metadata_input(data):
     return validated_data
 
 
-def validate_year(year_str):
+def validate_year(year_str: str) -> str:
     """
     Validate year string
     
     Args:
-        year_str (str): Year string to validate
+        year_str: Year string to validate
         
     Returns:
-        str: Validated year or empty string
+        Validated year or empty string
     """
     if not year_str:
         return ''

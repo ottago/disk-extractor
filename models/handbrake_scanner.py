@@ -10,6 +10,7 @@ import subprocess
 import logging
 from pathlib import Path
 from datetime import datetime
+from typing import Dict, Any, Union
 
 from config import Config
 from utils.security import safe_decode_subprocess_output
@@ -26,12 +27,12 @@ class HandBrakeScanner:
     """Handles HandBrake CLI integration for scanning media files"""
     
     @staticmethod
-    def _check_handbrake_available():
+    def _check_handbrake_available() -> bool:
         """
         Check if HandBrake CLI is available
         
         Returns:
-            bool: True if HandBrake CLI is available
+            True if HandBrake CLI is available
         """
         try:
             result = subprocess.run([Config.HANDBRAKE_CLI_PATH, '--version'], 
@@ -41,15 +42,15 @@ class HandBrakeScanner:
             return False
     
     @staticmethod
-    def scan_file(file_path):
+    def scan_file(file_path: Union[str, Path]) -> Dict[str, Any]:
         """
         Scan a media file using HandBrake CLI
         
         Args:
-            file_path (str or Path): Path to the media file
+            file_path: Path to the media file
             
         Returns:
-            dict: HandBrake scan results
+            HandBrake scan results
             
         Raises:
             HandBrakeError: If scanning fails
@@ -154,16 +155,16 @@ class HandBrakeScanner:
             raise HandBrakeError(f"Unexpected error scanning {filename}: {e}")
 
     @staticmethod
-    def _parse_handbrake_json(raw_output):
+    def _parse_handbrake_json(raw_output: str) -> Dict[str, Any]:
         """
         Parse HandBrake JSON output which may contain multiple JSON documents
         or have additional text mixed with JSON.
         
         Args:
-            raw_output (str): Raw HandBrake output
+            raw_output: Raw HandBrake output
             
         Returns:
-            dict: Parsed JSON data
+            Parsed JSON data
             
         Raises:
             json.JSONDecodeError: If JSON cannot be parsed
@@ -322,11 +323,11 @@ class HandBrakeScanner:
         )
     
     @staticmethod
-    def test_availability():
+    def test_availability() -> bool:
         """
         Test if HandBrake is available and working
         
         Returns:
-            bool: True if HandBrake is available
+            True if HandBrake is available
         """
         return HandBrakeScanner._check_handbrake_available()

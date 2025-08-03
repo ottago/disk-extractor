@@ -6,16 +6,17 @@ Centralizes all configuration settings and constants.
 
 import os
 from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 
 class Config:
     """Application configuration settings"""
     
     # HandBrake settings
-    HANDBRAKE_TIMEOUT = int(os.getenv('HANDBRAKE_TIMEOUT', 120))
+    HANDBRAKE_TIMEOUT: int = int(os.getenv('HANDBRAKE_TIMEOUT', 120))
     # Try Docker path first, then local path
-    _handbrake_paths = ['/usr/local/bin/HandBrakeCLI', '/usr/bin/HandBrakeCLI']
-    HANDBRAKE_CLI_PATH = os.getenv('HANDBRAKE_CLI_PATH')
+    _handbrake_paths: List[str] = ['/usr/local/bin/HandBrakeCLI', '/usr/bin/HandBrakeCLI']
+    HANDBRAKE_CLI_PATH: str = os.getenv('HANDBRAKE_CLI_PATH', '')
     if not HANDBRAKE_CLI_PATH:
         for path in _handbrake_paths:
             if os.path.exists(path):
@@ -25,34 +26,42 @@ class Config:
             HANDBRAKE_CLI_PATH = _handbrake_paths[0]  # Default to Docker path
     
     # Cache settings
-    MAX_CACHE_SIZE = int(os.getenv('MAX_CACHE_SIZE', 100))
-    CACHE_TTL = int(os.getenv('CACHE_TTL', 3600))  # 1 hour
+    MAX_CACHE_SIZE: int = int(os.getenv('MAX_CACHE_SIZE', 100))
+    CACHE_TTL: int = int(os.getenv('CACHE_TTL', 3600))  # 1 hour
     
     # File settings
-    ALLOWED_EXTENSIONS = ['.img']
-    MAX_FILENAME_LENGTH = 255
-    MAX_SYNOPSIS_LENGTH = 5000
-    MAX_MOVIE_NAME_LENGTH = 1000
+    ALLOWED_EXTENSIONS: List[str] = ['.img']
+    MAX_FILENAME_LENGTH: int = 255
+    MAX_SYNOPSIS_LENGTH: int = 5000
+    MAX_MOVIE_NAME_LENGTH: int = 1000
     
     # Security settings
-    ALLOWED_FILENAME_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.()[]'
+    ALLOWED_FILENAME_CHARS: str = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.()[]'
     
     # Title suggestion settings
-    MIN_TITLE_DURATION_MINUTES = 10  # Skip titles shorter than this (likely trailers)
-    MIN_COLLAPSED_DURATION_SECONDS = 1800  # 30 minutes - collapse shorter titles by default
+    MIN_TITLE_DURATION_MINUTES: int = 10  # Skip titles shorter than this (likely trailers)
+    MIN_COLLAPSED_DURATION_SECONDS: int = 1800  # 30 minutes - collapse shorter titles by default
     
     # Flask settings
-    DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    HOST = os.getenv('FLASK_HOST', '0.0.0.0')
-    PORT = int(os.getenv('FLASK_PORT', 5000))
+    DEBUG: bool = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    HOST: str = os.getenv('FLASK_HOST', '0.0.0.0')
+    PORT: int = int(os.getenv('FLASK_PORT', 5000))
     
     # Logging settings
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
     
     @classmethod
-    def validate(cls):
-        """Validate configuration settings"""
-        errors = []
+    def validate(cls) -> bool:
+        """
+        Validate configuration settings
+        
+        Returns:
+            bool: True if configuration is valid
+            
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        errors: List[str] = []
         
         if cls.HANDBRAKE_TIMEOUT <= 0:
             errors.append("HANDBRAKE_TIMEOUT must be positive")
@@ -73,7 +82,7 @@ class Config:
 
 
 # Security headers configuration
-SECURITY_HEADERS = {
+SECURITY_HEADERS: Dict[str, str] = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',
@@ -91,7 +100,7 @@ SECURITY_HEADERS = {
 }
 
 # API cache control headers
-API_CACHE_HEADERS = {
+API_CACHE_HEADERS: Dict[str, str] = {
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0'
