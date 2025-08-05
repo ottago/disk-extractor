@@ -42,7 +42,7 @@ class MovieMetadataManager:
         self.handbrake_cache: TTLCache = TTLCache(maxsize=Config.MAX_CACHE_SIZE, ttl=Config.CACHE_TTL)
         
         # File change callbacks
-        self.change_callbacks: List[Callable[[str], None]] = []
+        self.change_callbacks: List[Callable[[str, Optional[str]], None]] = []
         
         # Register with file watcher
         file_watcher.add_callback(self._on_file_change)
@@ -50,17 +50,17 @@ class MovieMetadataManager:
         if directory:
             self.set_directory(directory)
     
-    def add_change_callback(self, callback: Callable[[str], None]) -> None:
+    def add_change_callback(self, callback: Callable[[str, Optional[str]], None]) -> None:
         """
         Add a callback to be called when the movie list changes
         
         Args:
-            callback: Function to call with change type ('added', 'removed', 'modified')
+            callback: Function to call with change type and optional filename
         """
         self.change_callbacks.append(callback)
         logger.debug(f"Added change callback: {callback.__name__}")
     
-    def remove_change_callback(self, callback: Callable[[str], None]) -> None:
+    def remove_change_callback(self, callback: Callable[[str, Optional[str]], None]) -> None:
         """
         Remove a change callback
         
@@ -71,13 +71,13 @@ class MovieMetadataManager:
             self.change_callbacks.remove(callback)
             logger.debug(f"Removed change callback: {callback.__name__}")
     
-    def _notify_change(self, change_type: str) -> None:
+    def _notify_change(self, change_type: str, filename: Optional[str] = None) -> None:
         """Notify all callbacks of a change"""
         for callback in self.change_callbacks:
             try:
-                callback(change_type)
+                callback(change_type, filename)
             except Exception as e:
-                logger.error(f"Error in change callback: {e}")
+                logger.error(f"Error in change callback: {e}", exc_info=True)
     
     def _on_file_change(self, event_type: str, file_path: str, file_type: str) -> None:
         """Handle file system changes"""
@@ -95,7 +95,9 @@ class MovieMetadataManager:
                 self._handle_file_added(file_path_obj, file_type)
             elif event_type == 'deleted':
                 self._handle_file_removed(file_path_obj, file_type)
-            elif event_type == 'modified':
+            elif event_type in ['modified', 'closed']:
+                # 'closed' events happen when a file is closed after writing
+                # Treat them as modifications for our purposes
                 self._handle_file_modified(file_path_obj, file_type)
             
         except Exception as e:
@@ -107,12 +109,13 @@ class MovieMetadataManager:
             # New movie file added
             logger.info(f"New movie file detected: {file_path.name}")
             self.scan_directory()  # Refresh the entire list
-            self._notify_change('added')
+            self._notify_change('added', file_path.name)
         elif file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
             # New metadata file added
+            movie_filename = file_path.stem + '.img'
             logger.info(f"New metadata file detected: {file_path.name}")
-            self._refresh_movie_metadata(file_path.stem + '.img')
-            self._notify_change('modified')
+            self._refresh_movie_metadata(movie_filename)
+            self._notify_change('metadata_updated', movie_filename)
     
     def _handle_file_removed(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is removed"""
@@ -123,20 +126,22 @@ class MovieMetadataManager:
             # Clear cache for this file
             if file_path.name in self.handbrake_cache:
                 del self.handbrake_cache[file_path.name]
-            self._notify_change('removed')
+            self._notify_change('removed', file_path.name)
         elif file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
             # Metadata file removed
+            movie_filename = file_path.stem + '.img'
             logger.info(f"Metadata file removed: {file_path.name}")
-            self._refresh_movie_metadata(file_path.stem + '.img')
-            self._notify_change('modified')
+            self._refresh_movie_metadata(movie_filename)
+            self._notify_change('metadata_updated', movie_filename)
     
     def _handle_file_modified(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is modified"""
         if file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
             # Metadata file modified
+            movie_filename = file_path.stem + '.img'
             logger.info(f"Metadata file modified: {file_path.name}")
-            self._refresh_movie_metadata(file_path.stem + '.img')
-            self._notify_change('modified')
+            self._refresh_movie_metadata(movie_filename)
+            self._notify_change('metadata_updated', movie_filename)
         elif file_type == 'movie' and file_path.suffix.lower() == '.img':
             # Movie file modified (size might have changed)
             logger.info(f"Movie file modified: {file_path.name}")
@@ -144,7 +149,7 @@ class MovieMetadataManager:
             # Clear HandBrake cache as file might have changed
             if file_path.name in self.handbrake_cache:
                 del self.handbrake_cache[file_path.name]
-            self._notify_change('modified')
+            self._notify_change('modified', file_path.name)
     
     def _remove_movie_from_list(self, filename: str) -> None:
         """Remove a movie from the in-memory list"""

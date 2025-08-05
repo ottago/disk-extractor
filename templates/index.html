@@ -122,16 +122,40 @@
         
         // File list updates
         socket.on('file_list_update', function(data) {
-            console.log('File list updated:', data.change_type);
+            console.log('File list updated:', data.change_type, data.filename);
             updateFileList(data.movies);
             
-            if (data.change_type) {
+            if (data.change_type && data.filename) {
                 const messages = {
-                    'added': 'New movie file detected',
-                    'removed': 'Movie file removed',
-                    'modified': 'Movie file updated'
+                    'added': `New movie file: ${data.filename}`,
+                    'removed': `Movie file removed: ${data.filename}`,
+                    'modified': `Movie file updated: ${data.filename}`,
+                    'metadata_updated': `Metadata updated: ${data.filename}`
                 };
                 showNotification(messages[data.change_type] || 'Files updated', 'info');
+            }
+        });
+        
+        // Specific metadata updates for currently viewed movie
+        socket.on('metadata_updated', function(data) {
+            console.log('Metadata updated for:', data.filename);
+            
+            // Check if this is the currently selected/viewed movie
+            if (typeof selectedFile !== 'undefined' && selectedFile === data.filename) {
+                console.log('Refreshing current movie metadata');
+                
+                // Update the current movie data
+                if (typeof currentMovies !== 'undefined') {
+                    const movieIndex = currentMovies.findIndex(m => m.file_name === data.filename);
+                    if (movieIndex !== -1) {
+                        currentMovies[movieIndex] = data.movie_data;
+                    }
+                }
+                
+                // Refresh the metadata display for the current movie
+                refreshCurrentMovieMetadata(data.movie_data);
+                
+                showNotification(`Metadata refreshed for ${data.filename}`, 'success');
             }
         });
         
@@ -197,6 +221,59 @@
             setTimeout(() => {
                 notification.remove();
             }, 4000);
+        }
+        
+        // Refresh the metadata display for the currently viewed movie
+        function refreshCurrentMovieMetadata(movieData) {
+            try {
+                // Update basic file info
+                const fileNameElement = document.getElementById('currentFileName');
+                const fileSizeElement = document.getElementById('currentFileSize');
+                
+                if (fileNameElement) {
+                    fileNameElement.textContent = movieData.file_name;
+                }
+                
+                if (fileSizeElement) {
+                    fileSizeElement.textContent = movieData.size_mb ? `${movieData.size_mb} MB` : '';
+                }
+                
+                // If there's a loadEnhancedMetadata function, call it to refresh the full metadata
+                if (typeof loadEnhancedMetadata === 'function') {
+                    console.log('Reloading enhanced metadata for updated file');
+                    loadEnhancedMetadata(movieData.file_name);
+                } else {
+                    console.log('Enhanced metadata function not available, basic info updated');
+                }
+                
+                // Update the file list item styling if metadata status changed
+                const fileItem = document.querySelector(`[data-filename="${CSS.escape(movieData.file_name)}"]`);
+                if (fileItem) {
+                    // Update the file item classes based on metadata status
+                    fileItem.className = `file-item ${movieData.has_metadata ? 'has-metadata' : 'no-metadata'}`;
+                    if (fileItem.classList.contains('selected')) {
+                        fileItem.classList.add('selected'); // Maintain selection
+                    }
+                    
+                    // Update status indicator
+                    const statusIndicator = fileItem.querySelector('.status-indicator');
+                    if (statusIndicator) {
+                        statusIndicator.className = `status-indicator ${movieData.has_metadata ? 'has-metadata' : 'no-metadata'}`;
+                    }
+                    
+                    // Update file info text
+                    const fileInfo = fileItem.querySelector('.file-info');
+                    if (fileInfo) {
+                        fileInfo.innerHTML = `
+                            ${movieData.size_mb ? movieData.size_mb + ' MB' : ''}
+                            ${movieData.has_metadata ? ' • Has metadata' : ' • No metadata'}
+                        `;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing current movie metadata:', error);
+            }
         }
         
         // Initialize connection status as offline

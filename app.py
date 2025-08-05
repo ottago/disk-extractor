@@ -65,17 +65,38 @@ def handle_request_file_list():
         emit('error', {'message': 'Failed to get file list'})
 
 
-def notify_file_changes(change_type: str) -> None:
+def notify_file_changes(change_type: str, filename: Optional[str] = None) -> None:
     """Notify all connected clients of file changes"""
     try:
+        # Send general file list update
         socketio.emit('file_list_update', {
             'movies': manager.movies,
             'directory': str(manager.directory) if manager.directory else None,
-            'change_type': change_type
+            'change_type': change_type,
+            'filename': filename
         })
-        logger.debug(f"Notified clients of file change: {change_type}")
+        
+        # Send specific metadata update if it's a metadata change
+        if change_type == 'metadata_updated' and filename:
+            # Find the updated movie data
+            movie_data = None
+            for movie in manager.movies:
+                if movie['file_name'] == filename:
+                    movie_data = movie
+                    break
+            
+            if movie_data:
+                socketio.emit('metadata_updated', {
+                    'filename': filename,
+                    'movie_data': movie_data
+                })
+                logger.debug(f"Sent metadata update for: {filename}")
+            else:
+                logger.debug(f"Movie data not found for: {filename}")
+        
+        logger.debug(f"Notified clients of file change: {change_type} - {filename}")
     except Exception as e:
-        logger.error(f"Error notifying file changes: {e}")
+        logger.error(f"Error notifying file changes: {e}", exc_info=True)
 
 
 # Security middleware
