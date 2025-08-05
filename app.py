@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
+from flask_socketio import SocketIO, emit
 
 # Import our modules
 from config import Config
@@ -28,9 +29,53 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'disk-extractor-secret-key-change-in-production')
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
 
 # Global manager instance
 manager = MovieMetadataManager()
+
+
+# WebSocket event handlers
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    logger.debug(f"Client connected: {request.sid}")
+    emit('status', {'message': 'Connected to Disk Extractor'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    logger.debug(f"Client disconnected: {request.sid}")
+
+
+@socketio.on('request_file_list')
+def handle_request_file_list():
+    """Handle request for current file list"""
+    try:
+        emit('file_list_update', {
+            'movies': manager.movies,
+            'directory': str(manager.directory) if manager.directory else None
+        })
+    except Exception as e:
+        logger.error(f"Error sending file list: {e}")
+        emit('error', {'message': 'Failed to get file list'})
+
+
+def notify_file_changes(change_type: str) -> None:
+    """Notify all connected clients of file changes"""
+    try:
+        socketio.emit('file_list_update', {
+            'movies': manager.movies,
+            'directory': str(manager.directory) if manager.directory else None,
+            'change_type': change_type
+        })
+        logger.debug(f"Notified clients of file change: {change_type}")
+    except Exception as e:
+        logger.error(f"Error notifying file changes: {e}")
 
 
 # Security middleware
@@ -106,12 +151,17 @@ def health() -> Union[Response, tuple]:
         handbrake_available = manager.test_handbrake()
         cache_stats = manager.get_cache_stats()
         
+        # Get file watcher stats
+        from utils.file_watcher import file_watcher
+        watcher_stats = file_watcher.get_stats()
+        
         return jsonify({
             'status': 'ok',
             'handbrake': 'available' if handbrake_available else 'unavailable',
             'directory': str(manager.directory) if manager.directory else None,
             'movie_count': len(manager.movies),
             'cache_stats': cache_stats,
+            'file_watcher': watcher_stats,
             'config': {
                 'handbrake_timeout': Config.HANDBRAKE_TIMEOUT,
                 'max_cache_size': Config.MAX_CACHE_SIZE,
@@ -152,6 +202,9 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
             logger.error(f"Error setting directory: {e}")
             sys.exit(1)
     
+    # Register file change callback
+    manager.add_change_callback(notify_file_changes)
+    
     # Register API routes
     api_bp = init_api_routes(manager)
     app.register_blueprint(api_bp)
@@ -176,18 +229,24 @@ def main() -> None:
     # Create and configure app
     app_instance = create_app(directory)
     
-    # Run the Flask app
+    # Run the Flask app with SocketIO
     logger.info("Starting Disk Extractor - Movie Metadata Manager")
     logger.info(f"Access the web interface at: http://{Config.HOST}:{Config.PORT}")
+    logger.info("Real-time file monitoring enabled")
     
     try:
-        app_instance.run(
+        socketio.run(
+            app_instance,
             host=Config.HOST, 
             port=Config.PORT, 
-            debug=Config.DEBUG
+            debug=Config.DEBUG,
+            allow_unsafe_werkzeug=True  # For development
         )
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
+        # Clean up file watcher
+        from utils.file_watcher import file_watcher
+        file_watcher.stop_watching()
     except Exception as e:
         logger.error(f"Application error: {e}")
         sys.exit(1)

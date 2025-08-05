@@ -10,6 +10,11 @@
     <div class="header">
         <h1>Disk Extractor - Movie Metadata Manager</h1>
         <p>Directory: {{ directory }}</p>
+        <!-- Minimal addition: connection status -->
+        <div class="connection-status">
+            <span id="connectionStatus" class="status-indicator offline">●</span>
+            <span id="connectionText">Connecting...</span>
+        </div>
     </div>
     
     <div class="container">
@@ -88,10 +93,114 @@
         </div>
     </div>
     
+    <!-- Minimal addition: notification area -->
+    <div id="notifications" class="notifications"></div>
+    
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
         // Initialize the app with movie data
         initializeApp({{ movies | tojson }});
+    </script>
+    
+    <!-- Minimal addition: WebSocket for file watching -->
+    <script src="{{ url_for('static', filename='js/vendor/socket.io.js') }}"></script>
+    <script>
+        // Initialize WebSocket connection for file watching
+        const socket = io();
+        
+        // Connection status handling
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            updateConnectionStatus(true);
+            showNotification('Live file monitoring active', 'success');
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
+            updateConnectionStatus(false);
+        });
+        
+        // File list updates
+        socket.on('file_list_update', function(data) {
+            console.log('File list updated:', data.change_type);
+            updateFileList(data.movies);
+            
+            if (data.change_type) {
+                const messages = {
+                    'added': 'New movie file detected',
+                    'removed': 'Movie file removed',
+                    'modified': 'Movie file updated'
+                };
+                showNotification(messages[data.change_type] || 'Files updated', 'info');
+            }
+        });
+        
+        // Update connection status indicator
+        function updateConnectionStatus(connected) {
+            const statusIndicator = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusIndicator.className = 'status-indicator online';
+                statusText.textContent = 'Live Updates';
+            } else {
+                statusIndicator.className = 'status-indicator offline';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+        
+        // Update file list with new data (minimal implementation)
+        function updateFileList(movies) {
+            if (typeof currentMovies !== 'undefined') {
+                currentMovies = movies;
+            }
+            
+            const fileList = document.getElementById('fileList');
+            const currentSelection = document.querySelector('.file-item.selected')?.dataset.filename;
+            
+            // Clear and rebuild list
+            fileList.innerHTML = '';
+            movies.forEach(movie => {
+                const li = document.createElement('li');
+                li.className = `file-item ${movie.has_metadata ? 'has-metadata' : 'no-metadata'}`;
+                li.dataset.filename = movie.file_name;
+                li.onclick = () => selectFile(movie.file_name);
+                
+                if (movie.file_name === currentSelection) {
+                    li.classList.add('selected');
+                }
+                
+                li.innerHTML = `
+                    <div class="file-name">
+                        <span class="status-indicator ${movie.has_metadata ? 'has-metadata' : 'no-metadata'}"></span>
+                        ${movie.file_name}
+                    </div>
+                    <div class="file-info">
+                        ${movie.size_mb ? movie.size_mb + ' MB' : ''}
+                        ${movie.has_metadata ? ' • Has metadata' : ' • No metadata'}
+                    </div>
+                `;
+                fileList.appendChild(li);
+            });
+        }
+        
+        // Show notification (minimal implementation)
+        function showNotification(message, type = 'info') {
+            const notifications = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            notifications.appendChild(notification);
+            
+            // Auto-remove after 4 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 4000);
+        }
+        
+        // Initialize connection status as offline
+        updateConnectionStatus(false);
     </script>
 </body>
 </html>

@@ -179,6 +179,12 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirement
 # Copy application code
 COPY . .
 
+# Download JavaScript dependencies during build
+RUN mkdir -p /app/static/js/vendor && \
+    curl -o /app/static/js/vendor/socket.io.js \
+    https://cdn.socket.io/4.7.2/socket.io.min.js && \
+    echo "Downloaded Socket.IO $(stat -c%s /app/static/js/vendor/socket.io.js) bytes"
+
 # Set proper ownership
 RUN chown -R appuser:appuser /app
 

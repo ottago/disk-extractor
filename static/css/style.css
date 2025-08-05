@@ -19,6 +19,7 @@ body {
     padding: 1rem;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
 }
 
 .header h1 {
@@ -30,6 +31,26 @@ body {
     margin: 0.5rem 0 0 0;
     opacity: 0.8;
     font-size: 0.9rem;
+}
+
+/* Connection status - minimal addition */
+.connection-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.status-indicator.online {
+    color: #27ae60;
+}
+
+.status-indicator.offline {
+    color: #e74c3c;
 }
 
 /* Container */
@@ -710,5 +731,56 @@ body {
     .tracks-container {
         flex-direction: column;
         gap: 1rem;
+    }
+}
+
+/* Minimal additions for file watcher notifications */
+.notifications {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 300px;
+}
+
+.notification {
+    background: white;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-left: 4px solid #2196f3;
+    font-size: 0.9rem;
+    animation: slideIn 0.3s ease-out;
+}
+
+.notification.success {
+    border-left-color: #4caf50;
+    background: #f1f8e9;
+}
+
+.notification.warning {
+    border-left-color: #ff9800;
+    background: #fff8e1;
+}
+
+.notification.error {
+    border-left-color: #f44336;
+    background: #ffebee;
+}
+
+.notification.info {
+    border-left-color: #2196f3;
+    background: #e3f2fd;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
     }
 }
