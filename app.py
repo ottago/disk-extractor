@@ -17,7 +17,10 @@ from flask_socketio import SocketIO, emit
 # Import our modules
 from config import Config
 from models.metadata_manager import MovieMetadataManager, MetadataError
+from models.encoding_engine import EncodingEngine
+from models.encoding_models import EncodingProgress, EncodingStatus
 from api.routes import init_api_routes
+from api.encoding_routes import create_encoding_routes, create_settings_routes
 from utils.security import apply_security_headers, check_path_traversal, log_security_event
 
 # Configure logging
@@ -34,8 +37,9 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'disk-extractor-secret-key-ch
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
 
-# Global manager instance
+# Global manager instances
 manager = MovieMetadataManager()
+encoding_engine = EncodingEngine(manager)
 
 
 # WebSocket event handlers
@@ -63,6 +67,73 @@ def handle_request_file_list():
     except Exception as e:
         logger.error(f"Error sending file list: {e}")
         emit('error', {'message': 'Failed to get file list'})
+
+
+@socketio.on('request_encoding_status')
+def handle_request_encoding_status():
+    """Handle request for current encoding status"""
+    try:
+        jobs = encoding_engine.get_all_jobs()
+        
+        # Group jobs by status
+        status_groups = {
+            'encoding': [],
+            'queued': [],
+            'completed': [],
+            'failed': []
+        }
+        
+        for job in jobs:
+            job_data = job.to_dict()
+            if job.status == EncodingStatus.ENCODING:
+                status_groups['encoding'].append(job_data)
+            elif job.status == EncodingStatus.QUEUED:
+                status_groups['queued'].append(job_data)
+            elif job.status == EncodingStatus.COMPLETED:
+                status_groups['completed'].append(job_data)
+            elif job.status == EncodingStatus.FAILED:
+                status_groups['failed'].append(job_data)
+        
+        emit('encoding_status_update', {
+            'jobs': status_groups,
+            'summary': {
+                'total_jobs': len(jobs),
+                'encoding_count': len(status_groups['encoding']),
+                'queued_count': len(status_groups['queued']),
+                'completed_count': len(status_groups['completed']),
+                'failed_count': len(status_groups['failed'])
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error sending encoding status: {e}")
+        emit('error', {'message': 'Failed to get encoding status'})
+
+
+def notify_encoding_progress(job_id: str, progress: EncodingProgress) -> None:
+    """Notify all connected clients of encoding progress"""
+    try:
+        socketio.emit('encoding_progress', {
+            'job_id': job_id,
+            'progress': progress.to_dict()
+        })
+        logger.debug(f"Sent progress update for job: {job_id} - {progress.percentage}%")
+    except Exception as e:
+        logger.error(f"Error notifying encoding progress: {e}")
+
+
+def notify_encoding_status_change(job_id: str, status: EncodingStatus) -> None:
+    """Notify all connected clients of encoding status changes"""
+    try:
+        socketio.emit('encoding_status_change', {
+            'job_id': job_id,
+            'status': status.value
+        })
+        logger.debug(f"Sent status change for job: {job_id} - {status.value}")
+        
+        # Also trigger file list update since encoding status affects file display
+        notify_file_changes('encoding_status_updated', job_id.split('_')[0])
+    except Exception as e:
+        logger.error(f"Error notifying encoding status change: {e}")
 
 
 def notify_file_changes(change_type: str, filename: Optional[str] = None) -> None:
@@ -147,6 +218,12 @@ def index() -> Union[str, Response]:
                          directory=str(manager.directory))
 
 
+@app.route('/settings')
+def settings() -> str:
+    """Settings page"""
+    return render_template('settings.html')
+
+
 @app.route('/setup', methods=['GET', 'POST'])
 def setup() -> str:
     """Directory selection page"""
@@ -226,9 +303,22 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     # Register file change callback
     manager.add_change_callback(notify_file_changes)
     
+    # Initialize and start encoding engine
+    encoding_engine.add_progress_callback(notify_encoding_progress)
+    encoding_engine.add_status_callback(notify_encoding_status_change)
+    encoding_engine.start()
+    
     # Register API routes
     api_bp = init_api_routes(manager)
     app.register_blueprint(api_bp)
+    
+    # Register encoding API routes
+    encoding_bp = create_encoding_routes(manager, encoding_engine)
+    app.register_blueprint(encoding_bp)
+    
+    # Register settings API routes
+    settings_bp = create_settings_routes(encoding_engine)
+    app.register_blueprint(settings_bp)
     
     return app
 
@@ -265,11 +355,15 @@ def main() -> None:
         )
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
+        # Clean up encoding engine
+        encoding_engine.stop()
         # Clean up file watcher
         from utils.file_watcher import file_watcher
         file_watcher.stop_watching()
     except Exception as e:
         logger.error(f"Application error: {e}")
+        # Clean up encoding engine
+        encoding_engine.stop()
         sys.exit(1)
 
 

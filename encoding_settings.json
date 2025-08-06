@@ -1,0 +1,14 @@
+{
+  "max_concurrent_encodes": 1,
+  "testing_mode": true,
+  "test_duration_seconds": 30,
+  "output_directory": "/tmp/tmpp16v5ql7/output",
+  "default_preset": "Fast 1080p30",
+  "auto_queue_new_files": false,
+  "progress_update_interval": 1,
+  "notification_settings": {
+    "on_completion": true,
+    "on_failure": true,
+    "on_queue_empty": true
+  }
+}

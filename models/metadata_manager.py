@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional, Union, Callable
 
 from config import Config
 from models.handbrake_scanner import HandBrakeScanner, HandBrakeError
+from models.encoding_models import ExtendedMetadata, EncodingStatus
 from utils.language_mapper import LanguageMapper
 from utils.validation import validate_filename, ValidationError
 from utils.file_watcher import file_watcher
@@ -246,25 +247,30 @@ class MovieMetadataManager:
         """
         metadata_file = img_file.with_suffix('.mmm')
         
-        # Load metadata if it exists
-        metadata: Dict[str, Any] = {
-            'file_name': img_file.name,
+        # Load metadata using extended structure
+        metadata = ExtendedMetadata.get_default_structure(img_file.name, self._get_file_size_mb(img_file))
+        
+        # Add legacy fields for backward compatibility
+        metadata.update({
             'movie_name': img_file.stem,
             'release_date': '',
-            'synopsis': '',
-            'size_mb': self._get_file_size_mb(img_file),
-            'titles': []
-        }
+            'synopsis': ''
+        })
         
         if metadata_file.exists():
             try:
                 with open(metadata_file, 'r', encoding='utf-8') as f:
                     saved_metadata = json.load(f)
                     metadata.update(saved_metadata)
+                    # Ensure encoding structure exists
+                    metadata = ExtendedMetadata.ensure_encoding_structure(metadata)
             except (json.JSONDecodeError, IOError, UnicodeDecodeError) as e:
                 logger.warning(f"Could not load metadata file {metadata_file}: {e}")
         
+        # Add computed fields
         metadata['has_metadata'] = self.has_meaningful_metadata(img_file.name)
+        metadata['encoding_status'] = ExtendedMetadata.get_file_encoding_status(metadata).value
+        
         return metadata
     
     def _get_file_size_mb(self, file_path: Path) -> Optional[float]:
@@ -514,12 +520,8 @@ class MovieMetadataManager:
         except OSError:
             pass
         
-        # Default metadata structure
-        metadata: Dict[str, Any] = {
-            'file_name': img_file,
-            'size_mb': file_size_mb,
-            'titles': []
-        }
+        # Default metadata structure with encoding support
+        metadata = ExtendedMetadata.get_default_structure(img_file, file_size_mb)
         
         # Try to load existing .mmm file
         if mmm_path.exists():
@@ -528,6 +530,9 @@ class MovieMetadataManager:
                     saved_metadata = json.load(f)
                 # Check if it's current format (has 'titles' key)
                 if 'titles' in saved_metadata:
+                    metadata.update(saved_metadata)
+                    # Ensure encoding structure exists
+                    metadata = ExtendedMetadata.ensure_encoding_structure(metadata)
                     metadata.update(saved_metadata)
                 else:
                     # Convert legacy format to current format

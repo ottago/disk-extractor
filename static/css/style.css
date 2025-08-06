@@ -33,11 +33,32 @@ body {
     font-size: 0.9rem;
 }
 
-/* Connection status - minimal addition */
-.connection-status {
+/* Header actions */
+.header-actions {
     position: absolute;
     top: 1rem;
     right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.settings-link {
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.3s;
+    font-size: 0.9rem;
+}
+
+.settings-link:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Connection status - minimal addition */
+.connection-status {
     display: flex;
     align-items: center;
     gap: 0.5rem;

@@ -9,10 +9,13 @@
 <body>
     <div class="header">
         <h1>Disk Extractor - Movie Metadata Manager</h1>
-        <!-- Minimal addition: connection status -->
-        <div class="connection-status">
-            <span id="connectionStatus" class="status-indicator offline">●</span>
-            <span id="connectionText">Connecting...</span>
+        <div class="header-actions">
+            <a href="{{ url_for('settings') }}" class="settings-link">⚙️ Settings</a>
+            <!-- Minimal addition: connection status -->
+            <div class="connection-status">
+                <span id="connectionStatus" class="status-indicator offline">●</span>
+                <span id="connectionText">Connecting...</span>
+            </div>
         </div>
     </div>
     

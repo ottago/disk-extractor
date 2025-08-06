@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Disk Extractor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .settings-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .settings-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        
+        .settings-section h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        
+        .form-group .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert-error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .template-upload {
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        .template-upload:hover {
+            border-color: #007bff;
+        }
+        
+        .template-upload.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        
+        .current-template {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Encoding Settings</h1>
+        <div class="header-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Main</a>
+        </div>
+    </div>
+    
+    <div class="settings-container">
+        <div id="alertContainer"></div>
+        
+        <form id="settingsForm">
+            <!-- Encoding Settings -->
+            <div class="settings-section">
+                <h3>Encoding Configuration</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="maxConcurrentEncodes">Maximum Concurrent Encodes</label>
+                        <select id="maxConcurrentEncodes" name="max_concurrent_encodes">
+                            <option value="1">1 (Safest)</option>
+                            <option value="2">2 (Recommended)</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="6">6</option>
+                            <option value="8">8 (High-end systems only)</option>
+                        </select>
+                        <div class="help-text">Number of encoding jobs to run simultaneously. Higher values require more CPU and memory.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="progressUpdateInterval">Progress Update Interval (seconds)</label>
+                        <select id="progressUpdateInterval" name="progress_update_interval">
+                            <option value="1">1 second (Responsive)</option>
+                            <option value="2">2 seconds</option>
+                            <option value="3">3 seconds</option>
+                            <option value="5">5 seconds (Efficient)</option>
+                        </select>
+                        <div class="help-text">How often to update encoding progress. Lower values are more responsive but use more resources.</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="outputDirectory">Output Directory</label>
+                    <input type="text" id="outputDirectory" name="output_directory" placeholder="/path/to/encoded/movies">
+                    <div class="help-text">Directory where encoded files will be saved. Leave empty to use the same directory as source files.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="defaultPreset">Default HandBrake Preset</label>
+                    <input type="text" id="defaultPreset" name="default_preset" placeholder="Fast 1080p30">
+                    <div class="help-text">Default HandBrake preset to use for encoding jobs.</div>
+                </div>
+            </div>
+            
+            <!-- Testing Mode -->
+            <div class="settings-section">
+                <h3>Testing Mode</h3>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="testingMode" name="testing_mode">
+                        Enable Testing Mode
+                    </label>
+                    <div class="help-text">When enabled, encodes will be limited to a short duration for testing purposes.</div>
+                </div>
+                
+                <div class="form-group" id="testDurationGroup" style="display: none;">
+                    <label for="testDurationSeconds">Test Duration (seconds)</label>
+                    <input type="number" id="testDurationSeconds" name="test_duration_seconds" min="10" max="600" value="60">
+                    <div class="help-text">Maximum duration for test encodes (10-600 seconds).</div>
+                </div>
+            </div>
+            
+            <!-- HandBrake Template -->
+            <div class="settings-section">
+                <h3>HandBrake Template</h3>
+                
+                <div class="form-group">
+                    <label>Upload HandBrake Preset File</label>
+                    <div class="template-upload" id="templateUpload">
+                        <p>Click here or drag and drop a HandBrake .json preset file</p>
+                        <input type="file" id="templateFile" accept=".json" style="display: none;">
+                    </div>
+                    <div class="help-text">Upload a HandBrake preset file (.json) to use custom encoding settings.</div>
+                    
+                    <div id="currentTemplate" class="current-template" style="display: none;">
+                        <strong>Current Template:</strong> <span id="templateName">None</span>
+                        <button type="button" class="btn btn-secondary" id="removeTemplate" style="float: right; padding: 5px 10px;">Remove</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notifications -->
+            <div class="settings-section">
+                <h3>Notifications</h3>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="notifyCompletion" name="notification_settings.on_completion">
+                        Notify when encoding completes
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="notifyFailure" name="notification_settings.on_failure">
+                        Notify when encoding fails
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="notifyQueueEmpty" name="notification_settings.on_queue_empty">
+                        Notify when encoding queue is empty
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="settings-section">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <button type="button" class="btn btn-secondary" id="resetSettings">Reset to Defaults</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // Settings management
+        let currentSettings = {};
+        
+        // Load current settings
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSettings = data.settings;
+                    populateForm(currentSettings);
+                } else {
+                    showAlert('Error loading settings: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error loading settings: ' + error.message, 'error');
+            }
+        }
+        
+        // Populate form with settings
+        function populateForm(settings) {
+            document.getElementById('maxConcurrentEncodes').value = settings.max_concurrent_encodes || 2;
+            document.getElementById('progressUpdateInterval').value = settings.progress_update_interval || 1;
+            document.getElementById('outputDirectory').value = settings.output_directory || '';
+            document.getElementById('defaultPreset').value = settings.default_preset || 'Fast 1080p30';
+            document.getElementById('testingMode').checked = settings.testing_mode || false;
+            document.getElementById('testDurationSeconds').value = settings.test_duration_seconds || 60;
+            
+            // Notification settings
+            const notifications = settings.notification_settings || {};
+            document.getElementById('notifyCompletion').checked = notifications.on_completion !== false;
+            document.getElementById('notifyFailure').checked = notifications.on_failure !== false;
+            document.getElementById('notifyQueueEmpty').checked = notifications.on_queue_empty !== false;
+            
+            // Update testing mode visibility
+            toggleTestingMode();
+        }
+        
+        // Save settings
+        async function saveSettings(formData) {
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('Settings saved successfully!', 'success');
+                    currentSettings = data.settings;
+                } else {
+                    showAlert('Error saving settings: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving settings: ' + error.message, 'error');
+            }
+        }
+        
+        // Show alert message
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alertDiv);
+            
+            // Auto-hide success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    alertDiv.remove();
+                }, 5000);
+            }
+        }
+        
+        // Toggle testing mode visibility
+        function toggleTestingMode() {
+            const testingMode = document.getElementById('testingMode').checked;
+            const testDurationGroup = document.getElementById('testDurationGroup');
+            testDurationGroup.style.display = testingMode ? 'block' : 'none';
+        }
+        
+        // Handle form submission
+        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const settings = {};
+            
+            // Convert form data to settings object
+            for (const [key, value] of formData.entries()) {
+                if (key.includes('.')) {
+                    // Handle nested properties like notification_settings.on_completion
+                    const [parent, child] = key.split('.');
+                    if (!settings[parent]) settings[parent] = {};
+                    settings[parent][child] = value === 'on';
+                } else if (e.target.elements[key].type === 'checkbox') {
+                    settings[key] = value === 'on';
+                } else if (e.target.elements[key].type === 'number') {
+                    settings[key] = parseInt(value);
+                } else {
+                    settings[key] = value;
+                }
+            }
+            
+            await saveSettings(settings);
+        });
+        
+        // Handle testing mode toggle
+        document.getElementById('testingMode').addEventListener('change', toggleTestingMode);
+        
+        // Handle reset to defaults
+        document.getElementById('resetSettings').addEventListener('click', () => {
+            if (confirm('Reset all settings to defaults? This cannot be undone.')) {
+                const defaultSettings = {
+                    max_concurrent_encodes: 2,
+                    testing_mode: false,
+                    test_duration_seconds: 60,
+                    output_directory: '',
+                    default_preset: 'Fast 1080p30',
+                    progress_update_interval: 1,
+                    notification_settings: {
+                        on_completion: true,
+                        on_failure: true,
+                        on_queue_empty: true
+                    }
+                };
+                
+                populateForm(defaultSettings);
+            }
+        });
+        
+        // Handle template upload
+        const templateUpload = document.getElementById('templateUpload');
+        const templateFile = document.getElementById('templateFile');
+        
+        templateUpload.addEventListener('click', () => {
+            templateFile.click();
+        });
+        
+        templateUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            templateUpload.classList.add('dragover');
+        });
+        
+        templateUpload.addEventListener('dragleave', () => {
+            templateUpload.classList.remove('dragover');
+        });
+        
+        templateUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            templateUpload.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleTemplateFile(files[0]);
+            }
+        });
+        
+        templateFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleTemplateFile(e.target.files[0]);
+            }
+        });
+        
+        // Handle template file upload
+        async function handleTemplateFile(file) {
+            if (!file.name.endsWith('.json')) {
+                showAlert('Please select a .json file', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('template', file);
+            
+            try {
+                const response = await fetch('/api/templates/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('Template uploaded successfully!', 'success');
+                    document.getElementById('templateName').textContent = file.name;
+                    document.getElementById('currentTemplate').style.display = 'block';
+                } else {
+                    showAlert('Error uploading template: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error uploading template: ' + error.message, 'error');
+            }
+        }
+        
+        // Load settings on page load
+        document.addEventListener('DOMContentLoaded', loadSettings);
+    </script>
+</body>
+</html>

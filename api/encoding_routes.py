@@ -1,0 +1,466 @@
+"""
+API routes for encoding management
+
+Provides REST endpoints for managing encoding jobs, queue, and settings.
+"""
+
+import logging
+from flask import Blueprint, request, jsonify, Response
+from typing import Dict, Any, Union, List
+
+from models.encoding_engine import EncodingEngine
+from models.encoding_models import EncodingSettings, EncodingStatus, ExtendedMetadata
+from utils.validation import validate_filename, ValidationError
+
+logger = logging.getLogger(__name__)
+
+
+def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) -> Blueprint:
+    """
+    Create encoding API routes
+    
+    Args:
+        metadata_manager: MovieMetadataManager instance
+        encoding_engine: EncodingEngine instance
+        
+    Returns:
+        Flask Blueprint with encoding routes
+    """
+    bp = Blueprint('encoding_api', __name__, url_prefix='/api/encoding')
+    
+    @bp.route('/queue', methods=['POST'])
+    def queue_encoding() -> Union[Response, tuple]:
+        """Queue a file for encoding"""
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No JSON data provided'
+                }), 400
+            
+            # Validate required fields
+            file_name = data.get('file_name', '').strip()
+            title_number = data.get('title_number')
+            movie_name = data.get('movie_name', '').strip()
+            
+            if not file_name:
+                return jsonify({
+                    'success': False,
+                    'error': 'file_name is required'
+                }), 400
+            
+            if title_number is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'title_number is required'
+                }), 400
+            
+            if not movie_name:
+                return jsonify({
+                    'success': False,
+                    'error': 'movie_name is required'
+                }), 400
+            
+            # Validate filename
+            try:
+                file_name = validate_filename(file_name)
+            except ValidationError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid filename: {str(e)}'
+                }), 400
+            
+            # Validate title number
+            try:
+                title_number = int(title_number)
+                if title_number < 1:
+                    raise ValueError("Title number must be positive")
+            except (ValueError, TypeError):
+                return jsonify({
+                    'success': False,
+                    'error': 'title_number must be a positive integer'
+                }), 400
+            
+            # Optional preset name
+            preset_name = data.get('preset_name', '').strip()
+            
+            # Check if file exists
+            if not metadata_manager.directory:
+                return jsonify({
+                    'success': False,
+                    'error': 'No directory configured'
+                }), 500
+            
+            img_path = metadata_manager.directory / file_name
+            if not img_path.exists():
+                return jsonify({
+                    'success': False,
+                    'error': f'File not found: {file_name}'
+                }), 404
+            
+            # Queue the encoding job
+            job_id = encoding_engine.queue_encoding_job(
+                file_name=file_name,
+                title_number=title_number,
+                movie_name=movie_name,
+                preset_name=preset_name
+            )
+            
+            return jsonify({
+                'success': True,
+                'job_id': job_id,
+                'message': f'Queued encoding job for {movie_name}'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error queuing encoding job: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/queue/<job_id>', methods=['DELETE'])
+    def remove_from_queue(job_id: str) -> Union[Response, tuple]:
+        """Remove a job from the encoding queue"""
+        try:
+            success = encoding_engine.cancel_job(job_id)
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': f'Job {job_id} removed from queue'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Job {job_id} not found or cannot be cancelled'
+                }), 404
+                
+        except Exception as e:
+            logger.error(f"Error removing job from queue: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/cancel/<job_id>', methods=['POST'])
+    def cancel_encoding(job_id: str) -> Union[Response, tuple]:
+        """Cancel an active encoding job"""
+        try:
+            success = encoding_engine.cancel_job(job_id)
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': f'Job {job_id} cancelled'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Job {job_id} not found or cannot be cancelled'
+                }), 404
+                
+        except Exception as e:
+            logger.error(f"Error cancelling encoding job: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/status', methods=['GET'])
+    def get_encoding_status() -> Union[Response, tuple]:
+        """Get status of all encoding jobs"""
+        try:
+            jobs = encoding_engine.get_all_jobs()
+            
+            # Group jobs by status
+            status_groups = {
+                'encoding': [],
+                'queued': [],
+                'completed': [],
+                'failed': [],
+                'cancelled': []
+            }
+            
+            for job in jobs:
+                job_data = job.to_dict()
+                
+                if job.status == EncodingStatus.ENCODING:
+                    status_groups['encoding'].append(job_data)
+                elif job.status == EncodingStatus.QUEUED:
+                    status_groups['queued'].append(job_data)
+                elif job.status == EncodingStatus.COMPLETED:
+                    status_groups['completed'].append(job_data)
+                elif job.status == EncodingStatus.FAILED:
+                    status_groups['failed'].append(job_data)
+                elif job.status == EncodingStatus.CANCELLED:
+                    status_groups['cancelled'].append(job_data)
+            
+            return jsonify({
+                'success': True,
+                'jobs': status_groups,
+                'summary': {
+                    'total_jobs': len(jobs),
+                    'encoding_count': len(status_groups['encoding']),
+                    'queued_count': len(status_groups['queued']),
+                    'completed_count': len(status_groups['completed']),
+                    'failed_count': len(status_groups['failed']),
+                    'cancelled_count': len(status_groups['cancelled'])
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting encoding status: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/progress/<job_id>', methods=['GET'])
+    def get_job_progress(job_id: str) -> Union[Response, tuple]:
+        """Get progress for a specific job"""
+        try:
+            job = encoding_engine.get_job_status(job_id)
+            
+            if not job:
+                return jsonify({
+                    'success': False,
+                    'error': f'Job {job_id} not found'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'job': job.to_dict()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting job progress: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/file/<file_name>/jobs', methods=['GET'])
+    def get_file_encoding_jobs(file_name: str) -> Union[Response, tuple]:
+        """Get all encoding jobs for a specific file"""
+        try:
+            # Validate filename
+            try:
+                file_name = validate_filename(file_name)
+            except ValidationError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid filename: {str(e)}'
+                }), 400
+            
+            # Load metadata
+            metadata = metadata_manager.load_metadata(file_name)
+            jobs = ExtendedMetadata.get_encoding_jobs(metadata)
+            history = ExtendedMetadata.get_encoding_history(metadata)
+            file_status = ExtendedMetadata.get_file_encoding_status(metadata)
+            
+            return jsonify({
+                'success': True,
+                'file_name': file_name,
+                'status': file_status.value,
+                'jobs': [job.to_dict() for job in jobs],
+                'history': [entry.to_dict() for entry in history]
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting file encoding jobs: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/queue/bulk', methods=['POST'])
+    def bulk_queue_operations() -> Union[Response, tuple]:
+        """Perform bulk queue operations"""
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No JSON data provided'
+                }), 400
+            
+            operation = data.get('operation', '').strip().lower()
+            file_names = data.get('file_names', [])
+            
+            if operation not in ['queue_all', 'clear_queue']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid operation. Must be "queue_all" or "clear_queue"'
+                }), 400
+            
+            results = []
+            
+            if operation == 'queue_all':
+                if not file_names:
+                    return jsonify({
+                        'success': False,
+                        'error': 'file_names list is required for queue_all operation'
+                    }), 400
+                
+                # Queue all files with selected titles
+                for file_name in file_names:
+                    try:
+                        file_name = validate_filename(file_name)
+                        metadata = metadata_manager.load_metadata(file_name)
+                        
+                        # Find selected titles
+                        for title in metadata.get('titles', []):
+                            if title.get('selected', False) and title.get('movie_name', '').strip():
+                                job_id = encoding_engine.queue_encoding_job(
+                                    file_name=file_name,
+                                    title_number=title.get('title_number', 1),
+                                    movie_name=title.get('movie_name', ''),
+                                    preset_name=None
+                                )
+                                results.append({
+                                    'file_name': file_name,
+                                    'title_number': title.get('title_number', 1),
+                                    'job_id': job_id,
+                                    'success': True
+                                })
+                    except Exception as e:
+                        results.append({
+                            'file_name': file_name,
+                            'success': False,
+                            'error': str(e)
+                        })
+            
+            elif operation == 'clear_queue':
+                # Cancel all queued jobs
+                jobs = encoding_engine.get_all_jobs()
+                for job in jobs:
+                    if job.status == EncodingStatus.QUEUED:
+                        job_id = f"{job.file_name}_{job.title_number}"
+                        success = encoding_engine.cancel_job(job_id)
+                        results.append({
+                            'job_id': job_id,
+                            'success': success
+                        })
+            
+            return jsonify({
+                'success': True,
+                'operation': operation,
+                'results': results,
+                'total_processed': len(results)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in bulk queue operation: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    return bp
+
+
+def create_settings_routes(encoding_engine: EncodingEngine) -> Blueprint:
+    """
+    Create encoding settings API routes
+    
+    Args:
+        encoding_engine: EncodingEngine instance
+        
+    Returns:
+        Flask Blueprint with settings routes
+    """
+    bp = Blueprint('settings_api', __name__, url_prefix='/api/settings')
+    
+    @bp.route('', methods=['GET'])
+    def get_settings() -> Union[Response, tuple]:
+        """Get current encoding settings"""
+        try:
+            settings = encoding_engine.get_settings()
+            return jsonify({
+                'success': True,
+                'settings': settings.to_dict()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting settings: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('', methods=['POST'])
+    def update_settings() -> Union[Response, tuple]:
+        """Update encoding settings"""
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No JSON data provided'
+                }), 400
+            
+            # Validate settings
+            try:
+                # Get current settings as base
+                current_settings = encoding_engine.get_settings()
+                settings_dict = current_settings.to_dict()
+                
+                # Update with provided values
+                settings_dict.update(data)
+                
+                # Validate specific fields
+                if 'max_concurrent_encodes' in settings_dict:
+                    max_concurrent = int(settings_dict['max_concurrent_encodes'])
+                    if max_concurrent < 1 or max_concurrent > 8:
+                        return jsonify({
+                            'success': False,
+                            'error': 'max_concurrent_encodes must be between 1 and 8'
+                        }), 400
+                    settings_dict['max_concurrent_encodes'] = max_concurrent
+                
+                if 'test_duration_seconds' in settings_dict:
+                    test_duration = int(settings_dict['test_duration_seconds'])
+                    if test_duration < 10 or test_duration > 600:
+                        return jsonify({
+                            'success': False,
+                            'error': 'test_duration_seconds must be between 10 and 600'
+                        }), 400
+                    settings_dict['test_duration_seconds'] = test_duration
+                
+                if 'progress_update_interval' in settings_dict:
+                    update_interval = int(settings_dict['progress_update_interval'])
+                    if update_interval < 1 or update_interval > 10:
+                        return jsonify({
+                            'success': False,
+                            'error': 'progress_update_interval must be between 1 and 10'
+                        }), 400
+                    settings_dict['progress_update_interval'] = update_interval
+                
+                # Create new settings object
+                new_settings = EncodingSettings.from_dict(settings_dict)
+                
+                # Update encoding engine
+                encoding_engine.update_settings(new_settings)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Settings updated successfully',
+                    'settings': new_settings.to_dict()
+                })
+                
+            except (ValueError, TypeError) as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid settings data: {str(e)}'
+                }), 400
+            
+        except Exception as e:
+            logger.error(f"Error updating settings: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    return bp
