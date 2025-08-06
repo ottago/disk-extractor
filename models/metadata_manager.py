@@ -250,13 +250,6 @@ class MovieMetadataManager:
         # Load metadata using extended structure
         metadata = ExtendedMetadata.get_default_structure(img_file.name, self._get_file_size_mb(img_file))
         
-        # Add legacy fields for backward compatibility
-        metadata.update({
-            'movie_name': img_file.stem,
-            'release_date': '',
-            'synopsis': ''
-        })
-        
         if metadata_file.exists():
             try:
                 with open(metadata_file, 'r', encoding='utf-8') as f:
@@ -528,24 +521,9 @@ class MovieMetadataManager:
             try:
                 with open(mmm_path, 'r', encoding='utf-8') as f:
                     saved_metadata = json.load(f)
-                # Check if it's current format (has 'titles' key)
-                if 'titles' in saved_metadata:
                     metadata.update(saved_metadata)
                     # Ensure encoding structure exists
                     metadata = ExtendedMetadata.ensure_encoding_structure(metadata)
-                    metadata.update(saved_metadata)
-                else:
-                    # Convert legacy format to current format
-                    metadata['titles'] = [{
-                        'title_number': 1,
-                        'selected': True,
-                        'movie_name': saved_metadata.get('movie_name', ''),
-                        'release_date': saved_metadata.get('release_date', ''),
-                        'synopsis': saved_metadata.get('synopsis', ''),
-                        'duration': '',
-                        'selected_audio_tracks': [],
-                        'selected_subtitle_tracks': []
-                    }]
             except (IOError, json.JSONDecodeError, UnicodeDecodeError) as e:
                 logger.warning(f"Could not load metadata for {img_file}: {e}")
         
