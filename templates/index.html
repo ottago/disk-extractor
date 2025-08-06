@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Disk Extractor - Movie Metadata Manager</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/encoding.css') }}">
 </head>
 <body>
     <div class="header">
@@ -63,6 +64,11 @@
                             </button>
                         </div>
                     </div>
+                    
+                    <!-- Queue Management Section -->
+                    <div class="queue-actions" id="queueActions">
+                        <!-- Queue management buttons will be populated by JavaScript -->
+                    </div>
                 </div>
                 
                 <div id="enhancedMetadata" class="enhanced-metadata">
@@ -74,6 +80,14 @@
                     
                     <div class="titles-container" id="titlesContainer">
                         <!-- Titles will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Encoding History Section -->
+                <div class="encoding-history" id="encodingHistory" style="display: none;">
+                    <h4>Encoding History</h4>
+                    <div id="historyContainer">
+                        <!-- History items will be populated by JavaScript -->
                     </div>
                 </div>
             </div>
@@ -280,6 +294,62 @@
         
         // Initialize connection status as offline
         updateConnectionStatus(false);
+    </script>
+    
+    <!-- Encoding UI JavaScript -->
+    <script src="{{ url_for('static', filename='js/encoding.js') }}"></script>
+    <script>
+        // Integrate encoding UI with existing app
+        if (window.socket) {
+            // Handle encoding-specific WebSocket events
+            window.socket.on('encoding_status_update', function(data) {
+                if (window.EncodingUI) {
+                    window.EncodingUI.handleEncodingStatusUpdate(data);
+                }
+            });
+            
+            window.socket.on('encoding_progress', function(data) {
+                if (window.EncodingUI) {
+                    window.EncodingUI.handleEncodingProgress(data);
+                }
+            });
+            
+            window.socket.on('encoding_status_change', function(data) {
+                if (window.EncodingUI) {
+                    window.EncodingUI.handleEncodingStatusChange(data);
+                }
+            });
+        }
+        
+        // Override selectFile to integrate with encoding UI
+        const originalSelectFile = window.selectFile;
+        window.selectFile = function(filename) {
+            if (originalSelectFile) {
+                originalSelectFile(filename);
+            }
+            
+            // Update encoding UI
+            if (window.EncodingUI) {
+                window.EncodingUI.setSelectedFile(filename);
+            }
+        };
+        
+        // Override updateFileList to use encoding-aware version
+        const originalUpdateFileList = window.updateFileList;
+        window.updateFileList = function(movies) {
+            // Store movies data for encoding UI
+            window.moviesData = movies;
+            
+            // Use encoding-aware file list update
+            if (window.EncodingUI) {
+                window.EncodingUI.updateFileListWithEncodingStatus();
+            } else {
+                // Fallback to original if encoding UI not loaded
+                if (originalUpdateFileList) {
+                    originalUpdateFileList(movies);
+                }
+            }
+        };
     </script>
 </body>
 </html>

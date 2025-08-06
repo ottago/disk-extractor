@@ -1,0 +1,323 @@
+/* Encoding UI Components */
+
+/* File list sections */
+.file-section {
+    margin-bottom: 1.5rem;
+}
+
+.file-section-header {
+    background: #f8f9fa;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: bold;
+    color: #495057;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.file-section-header.encoding {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.file-section-header.queued {
+    background: #cce5ff;
+    border-color: #007bff;
+    color: #004085;
+}
+
+.file-section-header.regular {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    color: #495057;
+}
+
+/* Enhanced file items with encoding status */
+.file-item {
+    position: relative;
+    border-left: 0.25rem solid transparent;
+    transition: all 0.3s ease;
+}
+
+.file-item.no-metadata {
+    border-left-color: #dc3545;
+}
+
+.file-item.has-metadata {
+    border-left-color: #28a745;
+}
+
+.file-item.queued {
+    border-left-color: #007bff;
+    background: rgba(0, 123, 255, 0.05);
+}
+
+.file-item.encoding {
+    border-left-color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+    animation: pulse-encoding 2s infinite;
+}
+
+.file-item.completed {
+    border-left-color: #28a745;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.file-item.failed {
+    border-left-color: #dc3545;
+    background: rgba(220, 53, 69, 0.05);
+}
+
+@keyframes pulse-encoding {
+    0%, 100% { background: rgba(255, 193, 7, 0.1); }
+    50% { background: rgba(255, 193, 7, 0.2); }
+}
+
+/* Progress display */
+.encoding-progress {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 0.375rem;
+    background: #e9ecef;
+    border-radius: 0.1875rem;
+    overflow: hidden;
+    margin-bottom: 0.375rem;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    border-radius: 0.1875rem;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.progress-bar.encoding {
+    background: linear-gradient(90deg, #ffc107, #e0a800);
+}
+
+.progress-bar.completed {
+    background: linear-gradient(90deg, #28a745, #1e7e34);
+}
+
+.progress-bar.failed {
+    background: linear-gradient(90deg, #dc3545, #c82333);
+}
+
+.progress-metrics {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.progress-metric {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #6c757d;
+}
+
+.progress-metric .metric-label {
+    font-weight: 500;
+}
+
+.progress-metric .metric-value {
+    color: #495057;
+}
+
+.encoding-phase {
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.75rem;
+    background: #6c757d;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.025rem;
+}
+
+.encoding-phase.scanning {
+    background: #17a2b8;
+}
+
+.encoding-phase.encoding {
+    background: #ffc107;
+    color: #212529;
+}
+
+.encoding-phase.muxing {
+    background: #6f42c1;
+}
+
+.encoding-phase.completed {
+    background: #28a745;
+}
+
+/* Queue management buttons */
+.queue-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.queue-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.queue-button.add-to-queue {
+    background: #007bff;
+    color: white;
+}
+
+.queue-button.add-to-queue:hover {
+    background: #0056b3;
+}
+
+.queue-button.remove-from-queue {
+    background: #6c757d;
+    color: white;
+}
+
+.queue-button.remove-from-queue:hover {
+    background: #545b62;
+}
+
+.queue-button.cancel-encoding {
+    background: #dc3545;
+    color: white;
+}
+
+.queue-button.cancel-encoding:hover {
+    background: #c82333;
+}
+
+.queue-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Encoding history */
+.encoding-history {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.encoding-history h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.875rem;
+    color: #495057;
+}
+
+.history-item {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.history-item.success {
+    border-left: 0.25rem solid #28a745;
+}
+
+.history-item.failed {
+    border-left: 0.25rem solid #dc3545;
+}
+
+.history-item .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.history-item .history-status {
+    font-weight: 500;
+}
+
+.history-item .history-date {
+    color: #6c757d;
+}
+
+.history-item .history-details {
+    color: #6c757d;
+    font-size: 0.6875rem;
+}
+
+/* Status indicators */
+.status-indicator {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.status-indicator.no-metadata {
+    background: #dc3545;
+}
+
+.status-indicator.has-metadata {
+    background: #28a745;
+}
+
+.status-indicator.queued {
+    background: #007bff;
+}
+
+.status-indicator.encoding {
+    background: #ffc107;
+    animation: pulse-indicator 1.5s infinite;
+}
+
+.status-indicator.completed {
+    background: #28a745;
+}
+
+.status-indicator.failed {
+    background: #dc3545;
+}
+
+@keyframes pulse-indicator {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .progress-metrics {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .queue-button {
+        width: 100%;
+        margin-right: 0;
+    }
+    
+    .file-section-header {
+        position: static;
+    }
+}
