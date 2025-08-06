@@ -483,7 +483,8 @@ function createTitleElement(title) {
                                     <input type="checkbox" 
                                            id="audio-${title.title_number}-${track.TrackNumber}"
                                            ${isChecked}
-                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
+                                           onclick="event.stopPropagation();"
+                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number});">
                                     <div class="track-info">
                                         <div class="track-language">${safeLanguageName}</div>
                                         <div class="track-details">${safeDescription}</div>
@@ -508,7 +509,8 @@ function createTitleElement(title) {
                                     <input type="checkbox" 
                                            id="subtitle-${title.title_number}-${track.TrackNumber}"
                                            ${isChecked}
-                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number}); event.stopPropagation();">
+                                           onclick="event.stopPropagation();"
+                                           onchange="saveMetadata(); updateTitleSummary(${title.title_number});">
                                     <div class="track-info">
                                         <div class="track-language">${safeLanguageName}</div>
                                         <div class="track-details">${safeName}</div>
@@ -610,7 +612,7 @@ function toggleTrack(trackId) {
     if (checkbox) {
         checkbox.checked = !checkbox.checked;
         // Trigger the change event to save metadata and update summary
-        checkbox.dispatchEvent(new Event('change'));
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
     }
 }
 
