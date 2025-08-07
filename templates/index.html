@@ -119,7 +119,7 @@
     </script>
     
     <!-- WebSocket for real-time updates -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/vendor/socket.io.js') }}"></script>
     <script>
         // Initialize WebSocket connection for file watching
         const socket = io();
