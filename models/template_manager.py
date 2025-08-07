@@ -246,11 +246,7 @@ class TemplateManager:
         """
         template = self.get_template(template_name)
         if not template:
-            # Fallback to basic command without template
-            return self._build_basic_command(
-                input_file, output_file, title_number, 
-                testing_mode, test_duration
-            )
+            raise HandBrakeError(f"Template '{template_name}' not found.")
         
         # Start with base command
         cmd = [
@@ -538,7 +534,7 @@ class TemplateManager:
         import re
         
         # Replace problematic characters with underscores
-        sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        sanitized = re.sub(r'[<>"/\\|?*]', '_', filename)
         
         # Remove control characters
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', sanitized)

@@ -329,27 +329,9 @@ class MovieMetadataManager:
                     'TitleList': []  # Empty list so other code doesn't break
                 }
                 
-                # Try to capture raw output for failed scans
-                if hasattr(e, 'cmd') and hasattr(e, 'returncode'):
-                    try:
-                        import subprocess
-                        from utils.security import safe_decode_subprocess_output
-                        
-                        cmd = [Config.HANDBRAKE_CLI_PATH, '--scan', '--title', '0', '--json', '--input', str(file_path)]
-                        result = subprocess.run(cmd, capture_output=True, text=False, timeout=Config.HANDBRAKE_TIMEOUT)
-                        
-                        stdout_decoded = safe_decode_subprocess_output(result.stdout)
-                        stderr_decoded = safe_decode_subprocess_output(result.stderr)
-                        
-                        error_cache['_raw_handbrake_output'] = {
-                            'stdout': stdout_decoded,
-                            'stderr': stderr_decoded,
-                            'exit_code': result.returncode,
-                            'command': ' '.join(cmd),
-                            'scan_timestamp': datetime.now().isoformat()
-                        }
-                    except Exception as raw_error:
-                        logger.debug(f"Could not capture raw output for failed scan: {raw_error}")
+                # Use raw output from the exception if available (avoids duplicating the command)
+                if hasattr(e, 'raw_output'):
+                    error_cache['_raw_handbrake_output'] = e.raw_output
                 
                 self.handbrake_cache[img_file] = error_cache
         
@@ -503,7 +485,8 @@ class MovieMetadataManager:
         # Validate filename
         img_file = validate_filename(img_file)
         
-        mmm_path = self.directory / (Path(img_file).stem + '.mmm')
+        mmm_file = Path(img_file).stem + '.mmm'
+        mmm_path = self.directory / mmm_file
         
         # Get file size
         file_size_mb: Optional[float] = 0
@@ -525,7 +508,7 @@ class MovieMetadataManager:
                     # Ensure encoding structure exists
                     metadata = ExtendedMetadata.ensure_encoding_structure(metadata)
             except (IOError, json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.warning(f"Could not load metadata for {img_file}: {e}")
+                logger.warning(f"Could not load metadata for {mmm_file}: {e}")
         
         return metadata
     

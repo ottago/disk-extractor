@@ -107,6 +107,15 @@ class HandBrakeScanner:
             
             logger.info(f"HandBrake exit code: {result.returncode}")
             
+            # Store raw output for debugging/viewing (always capture this)
+            raw_output_data = {
+                'stdout': stdout_decoded,
+                'stderr': stderr_decoded,
+                'exit_code': result.returncode,
+                'command': ' '.join(cmd),
+                'scan_timestamp': datetime.now().isoformat()
+            }
+            
             if result.returncode == 0:
                 try:
                     # Parse JSON output - HandBrake may output multiple JSON documents
@@ -118,41 +127,90 @@ class HandBrakeScanner:
                     logger.info(f"Found {title_count} titles in: {filename}")
                     
                     # Store raw output for debugging/viewing
-                    data['_raw_handbrake_output'] = {
-                        'stdout': stdout_decoded,
-                        'stderr': stderr_decoded,
-                        'exit_code': result.returncode,
-                        'command': ' '.join(cmd),
-                        'scan_timestamp': datetime.now().isoformat()
-                    }
+                    data['_raw_handbrake_output'] = raw_output_data
                     
                     return data
                 except json.JSONDecodeError as e:
                     error_msg = f"HandBrake returned invalid JSON for {filename}: {e}"
                     logger.error(error_msg)
                     logger.error(f"Raw HandBrake output: {repr(stdout_decoded[:1000])}")
-                    raise HandBrakeError(error_msg)
+                    # Create HandBrakeError with raw output data attached
+                    error = HandBrakeError(error_msg)
+                    error.raw_output = raw_output_data
+                    raise error
             else:
                 # HandBrake failed - return error details
                 error_msg = f"HandBrake scan failed for {filename} (exit code {result.returncode})"
                 if stderr_decoded:
                     error_msg += f": {stderr_decoded.strip()}"
                 logger.error(error_msg)
-                raise HandBrakeError(error_msg)
+                # Create HandBrakeError with raw output data attached
+                error = HandBrakeError(error_msg)
+                error.raw_output = raw_output_data
+                raise error
                 
         except subprocess.TimeoutExpired:
             error_msg = f"HandBrake scan timed out after {Config.HANDBRAKE_TIMEOUT} seconds for file: {filename}"
             logger.error(error_msg)
-            raise TimeoutError(error_msg)
+            error = TimeoutError(error_msg)
+            # Try to attach any partial output if available
+            try:
+                error.raw_output = {
+                    'stdout': '',
+                    'stderr': '',
+                    'exit_code': -1,
+                    'command': ' '.join(cmd),
+                    'scan_timestamp': datetime.now().isoformat(),
+                    'timeout': True
+                }
+            except:
+                pass
+            raise error
         except FileNotFoundError as e:
             logger.error(f"HandBrake CLI not available: {e}")
-            raise
+            error = FileNotFoundError(str(e))
+            try:
+                error.raw_output = {
+                    'stdout': '',
+                    'stderr': str(e),
+                    'exit_code': -1,
+                    'command': ' '.join(cmd) if 'cmd' in locals() else 'HandBrake CLI not found',
+                    'scan_timestamp': datetime.now().isoformat(),
+                    'handbrake_not_found': True
+                }
+            except:
+                pass
+            raise error
         except PermissionError as e:
             logger.error(f"Permission error: {e}")
-            raise
+            error = PermissionError(str(e))
+            try:
+                error.raw_output = {
+                    'stdout': '',
+                    'stderr': str(e),
+                    'exit_code': -1,
+                    'command': ' '.join(cmd) if 'cmd' in locals() else 'Permission denied',
+                    'scan_timestamp': datetime.now().isoformat(),
+                    'permission_error': True
+                }
+            except:
+                pass
+            raise error
         except Exception as e:
             logger.error(f"Unexpected error scanning {filename}: {e}")
-            raise HandBrakeError(f"Unexpected error scanning {filename}: {e}")
+            error = HandBrakeError(f"Unexpected error scanning {filename}: {e}")
+            try:
+                error.raw_output = {
+                    'stdout': '',
+                    'stderr': str(e),
+                    'exit_code': -1,
+                    'command': ' '.join(cmd) if 'cmd' in locals() else 'Unknown command',
+                    'scan_timestamp': datetime.now().isoformat(),
+                    'unexpected_error': True
+                }
+            except:
+                pass
+            raise error
 
     @staticmethod
     def _parse_handbrake_json(raw_output: str) -> Dict[str, Any]:
