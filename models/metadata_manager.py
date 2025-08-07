@@ -89,7 +89,7 @@ class MovieMetadataManager:
             if not self.directory or file_path_obj.parent != self.directory:
                 return
             
-            logger.info(f"Processing file change: {event_type} - {file_path_obj.name} ({file_type})")
+            logger.debug(f"Processing file change: {event_type} - {file_path_obj.name} ({file_type})")
             
             # Handle different event types
             if event_type in ['created', 'moved']:
