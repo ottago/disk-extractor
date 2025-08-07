@@ -21,7 +21,9 @@ from models.encoding_engine import EncodingEngine
 from models.encoding_models import EncodingProgress, EncodingStatus
 from api.routes import init_api_routes
 from api.encoding_routes import create_encoding_routes, create_settings_routes
+from api.template_routes import create_template_routes
 from utils.security import apply_security_headers, check_path_traversal, log_security_event
+from utils.json_helpers import prepare_for_template
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +42,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger
 # Global manager instances
 manager = MovieMetadataManager()
 encoding_engine = EncodingEngine(manager)
+
+# App creation guard to prevent multiple creations
+_app_created = False
 
 
 # WebSocket event handlers
@@ -112,9 +117,10 @@ def handle_request_encoding_status():
 def notify_encoding_progress(job_id: str, progress: EncodingProgress) -> None:
     """Notify all connected clients of encoding progress"""
     try:
+        progress_data = prepare_for_template(progress.to_dict())
         socketio.emit('encoding_progress', {
             'job_id': job_id,
-            'progress': progress.to_dict()
+            'progress': progress_data
         })
         logger.debug(f"Sent progress update for job: {job_id} - {progress.percentage}%")
     except Exception as e:
@@ -139,9 +145,12 @@ def notify_encoding_status_change(job_id: str, status: EncodingStatus) -> None:
 def notify_file_changes(change_type: str, filename: Optional[str] = None) -> None:
     """Notify all connected clients of file changes"""
     try:
+        # Prepare movies data for JSON serialization
+        movies_data = prepare_for_template(manager.movies)
+        
         # Send general file list update
         socketio.emit('file_list_update', {
-            'movies': manager.movies,
+            'movies': movies_data,
             'directory': str(manager.directory) if manager.directory else None,
             'change_type': change_type,
             'filename': filename
@@ -151,7 +160,7 @@ def notify_file_changes(change_type: str, filename: Optional[str] = None) -> Non
         if change_type == 'metadata_updated' and filename:
             # Find the updated movie data
             movie_data = None
-            for movie in manager.movies:
+            for movie in movies_data:  # Use prepared data
                 if movie['file_name'] == filename:
                     movie_data = movie
                     break
@@ -213,8 +222,11 @@ def index() -> Union[str, Response]:
     if not manager.directory:
         return redirect(url_for('setup'))
     
+    # Prepare movies data for template to handle enum serialization
+    movies_data = prepare_for_template(manager.movies)
+    
     return render_template('index.html', 
-                         movies=manager.movies, 
+                         movies=movies_data, 
                          directory=str(manager.directory))
 
 
@@ -284,6 +296,15 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     Returns:
         Configured Flask application
     """
+    global _app_created
+    
+    # Prevent multiple app creations in the same process
+    if _app_created:
+        logger.warning("App already created in this process, returning existing configuration")
+        return app
+    
+    _app_created = True
+    
     # Validate configuration
     try:
         Config.validate()
@@ -319,6 +340,10 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     # Register settings API routes
     settings_bp = create_settings_routes(encoding_engine)
     app.register_blueprint(settings_bp)
+    
+    # Register template API routes
+    template_bp = create_template_routes(encoding_engine.get_template_manager())
+    app.register_blueprint(template_bp)
     
     return app
 

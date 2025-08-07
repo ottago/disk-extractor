@@ -40,14 +40,14 @@
         updateProgressDisplay(job_id, progress);
         
         // Update file list if needed
-        const fileName = job_id.split('_')[0];
+        const fileName = extractFileNameFromJobId(job_id);
         updateFileEncodingStatus(fileName);
     }
     
     // Handle encoding status changes
     function handleEncodingStatusChange(data) {
         const { job_id, status } = data;
-        const fileName = job_id.split('_')[0];
+        const fileName = extractFileNameFromJobId(job_id);
         
         // Update file status
         updateFileEncodingStatus(fileName, status);
@@ -57,6 +57,17 @@
         
         // Show notification if needed
         showEncodingNotification(job_id, status);
+    }
+    
+    // Extract filename from job ID (format: filename_titleNumber_uuid)
+    function extractFileNameFromJobId(job_id) {
+        // Split by underscore and remove the last two parts (title number and UUID)
+        const parts = job_id.split('_');
+        if (parts.length >= 3) {
+            // Remove the last two parts and rejoin
+            return parts.slice(0, -2).join('_');
+        }
+        return job_id; // Fallback
     }
     
     // Update file list with encoding status sections

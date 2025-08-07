@@ -1,0 +1,25 @@
+{
+  "PresetName": "Test Template",
+  "PresetDescription": "A test template for encoding",
+  "PresetCategory": "Custom",
+  "VideoEncoder": "x264",
+  "VideoQualitySlider": 20,
+  "VideoTwoPass": false,
+  "FileFormat": "mp4",
+  "AudioList": [
+    {
+      "AudioEncoder": "av_aac",
+      "AudioBitrate": 128
+    }
+  ],
+  "SubtitleList": [],
+  "ChapterMarkers": true,
+  "PictureWidth": 1920,
+  "PictureHeight": 1080,
+  "PictureCrop": [
+    0,
+    0,
+    0,
+    0
+  ]
+}

@@ -118,17 +118,29 @@
         initializeApp({{ movies | tojson }});
     </script>
     
-    <!-- Minimal addition: WebSocket for file watching -->
-    <script src="{{ url_for('static', filename='js/vendor/socket.io.js') }}"></script>
+    <!-- WebSocket for real-time updates -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
         // Initialize WebSocket connection for file watching
         const socket = io();
+        
+        // Make socket available globally for encoding UI
+        window.socket = socket;
         
         // Connection status handling
         socket.on('connect', function() {
             console.log('Connected to server');
             updateConnectionStatus(true);
             showNotification('Live file monitoring active', 'success');
+            
+            // Request initial encoding status
+            socket.emit('request_encoding_status');
+            
+            // Initialize encoding UI after connection
+            if (window.EncodingUI && typeof window.EncodingUI.initialize === 'function') {
+                window.EncodingUI.initialize();
+                console.log('Encoding UI initialized');
+            }
         });
         
         socket.on('disconnect', function() {
@@ -299,28 +311,6 @@
     <!-- Encoding UI JavaScript -->
     <script src="{{ url_for('static', filename='js/encoding.js') }}"></script>
     <script>
-        // Integrate encoding UI with existing app
-        if (window.socket) {
-            // Handle encoding-specific WebSocket events
-            window.socket.on('encoding_status_update', function(data) {
-                if (window.EncodingUI) {
-                    window.EncodingUI.handleEncodingStatusUpdate(data);
-                }
-            });
-            
-            window.socket.on('encoding_progress', function(data) {
-                if (window.EncodingUI) {
-                    window.EncodingUI.handleEncodingProgress(data);
-                }
-            });
-            
-            window.socket.on('encoding_status_change', function(data) {
-                if (window.EncodingUI) {
-                    window.EncodingUI.handleEncodingStatusChange(data);
-                }
-            });
-        }
-        
         // Override selectFile to integrate with encoding UI
         const originalSelectFile = window.selectFile;
         window.selectFile = function(filename) {

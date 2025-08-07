@@ -11,6 +11,7 @@ from typing import Dict, Any, Union, List
 from models.encoding_engine import EncodingEngine
 from models.encoding_models import EncodingSettings, EncodingStatus, ExtendedMetadata
 from utils.validation import validate_filename, ValidationError
+from utils.json_helpers import prepare_for_template
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +198,10 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 elif job.status == EncodingStatus.CANCELLED:
                     status_groups['cancelled'].append(job_data)
             
+            status_groups_data = prepare_for_template(status_groups)
             return jsonify({
                 'success': True,
-                'jobs': status_groups,
+                'jobs': status_groups_data,
                 'summary': {
                     'total_jobs': len(jobs),
                     'encoding_count': len(status_groups['encoding']),
@@ -229,9 +231,10 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                     'error': f'Job {job_id} not found'
                 }), 404
             
+            job_data = prepare_for_template(job.to_dict())
             return jsonify({
                 'success': True,
-                'job': job.to_dict()
+                'job': job_data
             })
             
         except Exception as e:

@@ -83,7 +83,7 @@
             
             <!-- HandBrake Template -->
             <div class="settings-section">
-                <h3>HandBrake Template</h3>
+                <h3>HandBrake Templates</h3>
                 
                 <div class="form-group">
                     <label>Upload HandBrake Preset File</label>
@@ -92,10 +92,12 @@
                         <input type="file" id="templateFile" accept=".json" style="display: none;">
                     </div>
                     <div class="help-text">Upload a HandBrake preset file (.json) to use custom encoding settings.</div>
-                    
-                    <div id="currentTemplate" class="current-template" style="display: none;">
-                        <strong>Current Template:</strong> <span id="templateName">None</span>
-                        <button type="button" class="btn btn-secondary" id="removeTemplate" style="float: right; padding: 0.3125rem 0.625rem;">Remove</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Available Templates</label>
+                    <div id="templatesContainer" class="templates-container">
+                        <!-- Templates will be populated by JavaScript -->
                     </div>
                 </div>
             </div>

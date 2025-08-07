@@ -10,12 +10,10 @@ from flask import Blueprint, request, jsonify, Response
 
 from utils.validation import validate_metadata_input, ValidationError
 from utils.security import log_security_event
+from utils.json_helpers import prepare_for_template
 from models.metadata_manager import MovieMetadataManager
 
 logger = logging.getLogger(__name__)
-
-# Create API blueprint
-api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
 def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
@@ -28,6 +26,8 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
     Returns:
         Configured API blueprint
     """
+    # Create API blueprint inside the function to avoid multiple registration issues
+    api_bp = Blueprint('api', __name__, url_prefix='/api')
     
     @api_bp.route('/save_metadata', methods=['POST'])
     def save_metadata() -> Response:
@@ -65,7 +65,8 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
         """Get updated file list with status"""
         try:
             manager.scan_directory()  # Refresh the list
-            return jsonify({'movies': manager.movies})
+            movies_data = prepare_for_template(manager.movies)
+            return jsonify({'movies': movies_data})
         except Exception as e:
             logger.error(f"Error in file_list endpoint: {e}")
             return jsonify({'success': False, 'error': 'Internal server error'})
@@ -82,9 +83,10 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 del manager.handbrake_cache[filename]
             
             enhanced_metadata = manager.get_enhanced_metadata(filename)
+            metadata_data = prepare_for_template(enhanced_metadata)
             return jsonify({
                 'success': True, 
-                'metadata': enhanced_metadata,
+                'metadata': metadata_data,
                 'filename': filename
             })
         except ValidationError as e:
@@ -124,9 +126,10 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
         
         try:
             enhanced_metadata = manager.get_enhanced_metadata(filename)
+            metadata_data = prepare_for_template(enhanced_metadata)
             return jsonify({
                 'success': True, 
-                'metadata': enhanced_metadata,
+                'metadata': metadata_data,
                 'filename': filename
             })
         except ValidationError as e:

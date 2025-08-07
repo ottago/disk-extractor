@@ -23,6 +23,7 @@ from models.encoding_models import (
     EncodingJob, EncodingProgress, EncodingHistory, EncodingStatus, 
     EncodingPhase, EncodingSettings, ExtendedMetadata
 )
+from models.template_manager import TemplateManager
 from utils.validation import validate_filename
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class EncodingEngine:
             metadata_manager: Reference to MovieMetadataManager
         """
         self.metadata_manager = metadata_manager
+        self.template_manager = TemplateManager()
         self.settings = EncodingSettings.get_default()
         self.encoding_queue: Queue = Queue()
         self.active_jobs: Dict[str, EncodingJob] = {}  # job_id -> EncodingJob
@@ -370,12 +372,37 @@ class EncodingEngine:
             self._handle_job_completion(job_id, job, False, error_msg)
     
     def _build_handbrake_command(self, job: EncodingJob) -> List[str]:
-        """Build HandBrake CLI command"""
+        """Build HandBrake CLI command using template manager"""
         if not self.metadata_manager or not self.metadata_manager.directory:
             raise ValueError("No metadata manager or directory set")
         
         input_path = self.metadata_manager.directory / job.file_name
-        output_path = Path(self.settings.output_directory) / job.output_filename
+        
+        # Generate output filename using template manager
+        try:
+            # Load metadata to get movie details
+            metadata = self.metadata_manager.load_metadata(job.file_name)
+            
+            # Find the title data
+            title_data = None
+            for title in metadata.get('titles', []):
+                if title.get('title_number') == job.title_number:
+                    title_data = title
+                    break
+            
+            # Get release date for filename generation
+            release_date = title_data.get('release_date', '') if title_data else ''
+            
+            # Generate output filename
+            output_filename = self.template_manager.generate_output_filename(
+                job.movie_name, release_date, job.preset_name
+            )
+            
+        except Exception as e:
+            logger.warning(f"Error generating output filename: {e}")
+            output_filename = self._generate_output_filename(job.movie_name, job.preset_name)
+        
+        output_path = Path(self.settings.output_directory) / output_filename
         
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -383,29 +410,53 @@ class EncodingEngine:
         # Store output path in job
         job.output_path = str(output_path)
         
-        # Base command
-        cmd = [
-            Config.HANDBRAKE_CLI_PATH,
-            '--input', str(input_path),
-            '--output', str(output_path),
-            '--title', str(job.title_number)
-        ]
-        
-        # Add preset if available
-        if job.preset_name:
-            cmd.extend(['--preset', job.preset_name])
-        
-        # Add testing mode parameters if enabled
-        if self.settings.testing_mode:
-            cmd.extend([
-                '--start-at', 'seconds:0',
-                '--stop-at', f'seconds:{self.settings.test_duration_seconds}'
-            ])
-        
-        # TODO: Add audio/subtitle track selection from metadata
-        # TODO: Add custom preset parameters from uploaded template
-        
-        return cmd
+        try:
+            # Get enhanced metadata for track selection
+            enhanced_metadata = self.metadata_manager.get_enhanced_metadata(job.file_name)
+            
+            # Extract selected audio and subtitle tracks
+            audio_tracks, subtitle_tracks = self.template_manager.extract_metadata_tracks(
+                enhanced_metadata, job.title_number
+            )
+            
+            # Build command using template manager
+            cmd = self.template_manager.build_handbrake_command(
+                input_file=input_path,
+                output_file=output_path,
+                template_name=job.preset_name,
+                title_number=job.title_number,
+                audio_tracks=audio_tracks,
+                subtitle_tracks=subtitle_tracks,
+                testing_mode=self.settings.testing_mode,
+                test_duration=self.settings.test_duration_seconds
+            )
+            
+            logger.info(f"Built HandBrake command with template: {job.preset_name}")
+            return cmd
+            
+        except Exception as e:
+            logger.warning(f"Error building command with template: {e}")
+            
+            # Fallback to basic command
+            cmd = [
+                Config.HANDBRAKE_CLI_PATH,
+                '--input', str(input_path),
+                '--output', str(output_path),
+                '--title', str(job.title_number)
+            ]
+            
+            # Add preset if available
+            if job.preset_name:
+                cmd.extend(['--preset', job.preset_name])
+            
+            # Add testing mode parameters if enabled
+            if self.settings.testing_mode:
+                cmd.extend([
+                    '--start-at', 'seconds:0',
+                    '--stop-at', f'seconds:{self.settings.test_duration_seconds}'
+                ])
+            
+            return cmd
     
     def _monitor_encoding_progress(self, job_id: str, job: EncodingJob, process: subprocess.Popen) -> None:
         """Monitor encoding progress in a separate thread"""
@@ -605,7 +656,9 @@ class EncodingEngine:
     
     def _load_settings(self) -> None:
         """Load encoding settings from file"""
-        settings_path = Path("encoding_settings.json")
+        # Use absolute path for settings file to avoid container issues
+        app_dir = Path(__file__).parent.parent
+        settings_path = app_dir / "encoding_settings.json"
         
         if settings_path.exists():
             try:
@@ -622,7 +675,9 @@ class EncodingEngine:
     
     def _save_settings(self) -> None:
         """Save encoding settings to file"""
-        settings_path = Path("encoding_settings.json")
+        # Use absolute path for settings file to avoid container issues
+        app_dir = Path(__file__).parent.parent
+        settings_path = app_dir / "encoding_settings.json"
         
         try:
             with open(settings_path, 'w') as f:
@@ -652,6 +707,10 @@ class EncodingEngine:
             
             # Shutdown old executor (will wait for current jobs to finish)
             threading.Thread(target=lambda: old_executor.shutdown(wait=True), daemon=True).start()
+    
+    def get_template_manager(self) -> TemplateManager:
+        """Get the template manager instance"""
+        return self.template_manager
     
     def get_settings(self) -> EncodingSettings:
         """Get current encoding settings"""

@@ -5,7 +5,7 @@
     // Settings management
     let currentSettings = {};
     
-    // Load current settings
+    // Load current settings and templates
     async function loadSettings() {
         try {
             const response = await fetch('/api/settings');
@@ -20,6 +20,97 @@
         } catch (error) {
             showAlert('Error loading settings: ' + error.message, 'error');
         }
+        
+        // Load available templates
+        await loadTemplates();
+    }
+    
+    // Load available templates
+    async function loadTemplates() {
+        try {
+            const response = await fetch('/api/templates');
+            const data = await response.json();
+            
+            if (data.success) {
+                updateTemplatesList(data.templates);
+            } else {
+                console.error('Error loading templates:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading templates:', error.message);
+        }
+    }
+    
+    // Update templates list display
+    function updateTemplatesList(templates) {
+        const templatesContainer = document.getElementById('templatesContainer');
+        if (!templatesContainer) return;
+        
+        if (templates.length === 0) {
+            templatesContainer.innerHTML = '<p class="no-templates">No templates uploaded yet.</p>';
+            return;
+        }
+        
+        const templatesList = templates.map(template => `
+            <div class="template-item">
+                <div class="template-info">
+                    <strong>${escapeHtml(template.name)}</strong>
+                    <div class="template-details">
+                        ${template.description ? escapeHtml(template.description) : 'No description'}
+                    </div>
+                    <div class="template-specs">
+                        Video: ${escapeHtml(template.video_encoder)} | 
+                        Audio: ${escapeHtml(template.audio_encoder)} | 
+                        Container: ${escapeHtml(template.container)}
+                    </div>
+                </div>
+                <div class="template-actions">
+                    <button type="button" class="btn btn-secondary template-delete" 
+                            data-template="${escapeHtml(template.name)}">Delete</button>
+                </div>
+            </div>
+        `).join('');
+        
+        templatesContainer.innerHTML = templatesList;
+        
+        // Add delete event listeners
+        templatesContainer.querySelectorAll('.template-delete').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const templateName = e.target.dataset.template;
+                deleteTemplate(templateName);
+            });
+        });
+    }
+    
+    // Delete a template
+    async function deleteTemplate(templateName) {
+        if (!confirm(`Delete template "${templateName}"? This cannot be undone.`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/templates/${encodeURIComponent(templateName)}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(`Template "${templateName}" deleted successfully`, 'success');
+                await loadTemplates(); // Refresh templates list
+            } else {
+                showAlert('Error deleting template: ' + data.error, 'error');
+            }
+        } catch (error) {
+            showAlert('Error deleting template: ' + error.message, 'error');
+        }
+    }
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     // Populate form with settings
