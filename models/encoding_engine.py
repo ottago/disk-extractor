@@ -476,6 +476,7 @@ class EncodingEngine:
                                 self._notify_progress(job_id, progress)
                                 
                                 # Update metadata periodically
+                                # TODO: Make this update every n seconds.
                                 if progress.percentage % 5 == 0:  # Every 5%
                                     self._update_job_in_metadata(job_id, job)
                     
