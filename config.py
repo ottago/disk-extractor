@@ -36,7 +36,7 @@ class Config:
     MAX_MOVIE_NAME_LENGTH: int = 1000
     
     # Security settings
-    ALLOWED_FILENAME_CHARS: str = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.()[]'
+    ALLOWED_FILENAME_CHARS: str = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.()[];$&#=+'
     
     # Title suggestion settings
     MIN_TITLE_DURATION_MINUTES: int = 10  # Skip titles shorter than this (likely trailers)
