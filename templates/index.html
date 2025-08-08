@@ -12,11 +12,16 @@
         <h1>Disk Extractor - Movie Metadata Manager</h1>
         <div class="header-actions">
             <a href="{{ url_for('settings') }}" class="settings-link">⚙️ Settings</a>
-            <!-- Minimal addition: connection status -->
-            <div class="connection-status">
-                <span id="connectionStatus" class="status-indicator offline">●</span>
-                <span id="connectionText">Connecting...</span>
-            </div>
+        </div>
+    </div>
+    
+    <!-- Disconnection Overlay -->
+    <div id="disconnectionOverlay" class="disconnection-overlay hidden">
+        <div class="disconnection-message">
+            <div class="disconnection-icon">⚠️</div>
+            <h2>Connection Lost</h2>
+            <p>Lost connection to server. Attempting to reconnect...</p>
+            <div class="reconnection-spinner"></div>
         </div>
     </div>
     
@@ -130,7 +135,7 @@
         // Connection status handling
         socket.on('connect', function() {
             console.log('Connected to server');
-            updateConnectionStatus(true);
+            hideDisconnectionOverlay();
             showNotification('Live file monitoring active', 'success');
             
             // Request initial encoding status
@@ -145,7 +150,7 @@
         
         socket.on('disconnect', function() {
             console.log('Disconnected from server');
-            updateConnectionStatus(false);
+            showDisconnectionOverlay();
         });
         
         // File list updates
@@ -187,17 +192,23 @@
             }
         });
         
-        // Update connection status indicator
-        function updateConnectionStatus(connected) {
-            const statusIndicator = document.getElementById('connectionStatus');
-            const statusText = document.getElementById('connectionText');
-            
-            if (connected) {
-                statusIndicator.className = 'status-indicator online';
-                statusText.textContent = 'Live Updates';
-            } else {
-                statusIndicator.className = 'status-indicator offline';
-                statusText.textContent = 'Disconnected';
+        // Show/hide disconnection overlay
+        function showDisconnectionOverlay() {
+            const overlay = document.getElementById('disconnectionOverlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                // Disable all interactive elements
+                document.body.style.pointerEvents = 'none';
+                overlay.style.pointerEvents = 'auto'; // Keep overlay interactive
+            }
+        }
+        
+        function hideDisconnectionOverlay() {
+            const overlay = document.getElementById('disconnectionOverlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                // Re-enable all interactive elements
+                document.body.style.pointerEvents = 'auto';
             }
         }
         
@@ -304,8 +315,8 @@
             }
         }
         
-        // Initialize connection status as offline
-        updateConnectionStatus(false);
+        // Initialize with disconnection overlay shown
+        showDisconnectionOverlay();
     </script>
     
     <!-- Encoding UI JavaScript -->

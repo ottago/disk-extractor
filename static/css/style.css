@@ -57,21 +57,66 @@ body {
     background: rgba(255, 255, 255, 0.2);
 }
 
-/* Connection status - minimal addition */
-.connection-status {
+/* Disconnection Overlay */
+.disconnection-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(3px);
+    z-index: 9999;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    opacity: 0.9;
+    justify-content: center;
+    transition: opacity 0.3s ease-in-out;
 }
 
-.status-indicator.online {
-    color: #27ae60;
+.disconnection-overlay.hidden {
+    display: none;
 }
 
-.status-indicator.offline {
-    color: #e74c3c;
+.disconnection-message {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-width: 400px;
+    margin: 1rem;
+}
+
+.disconnection-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.disconnection-message h2 {
+    color: #333;
+    margin: 0 0 1rem 0;
+    font-size: 1.5rem;
+}
+
+.disconnection-message p {
+    color: #666;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+}
+
+.reconnection-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Container */
