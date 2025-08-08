@@ -131,12 +131,18 @@ class ExtendedMetadata:
     @staticmethod
     def get_default_structure(file_name: str, size_mb: float = 0.0) -> Dict[str, Any]:
         """Get default metadata structure with encoding fields"""
-        return {
+        return ExtendedMetadata.ensure_encoding_structure({
             'file_name': file_name,
             'size_mb': size_mb,
-            'titles': [],
-            'encoding': {
-                'jobs': [],  # List of EncodingJob dictionaries
+            'titles': []
+        })
+    
+    @staticmethod
+    def ensure_encoding_structure(metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure metadata has encoding structure"""
+        if 'encoding' not in metadata:
+            metadata['encoding'] = {
+                'jobs': [],     # List of EncodingJob dictionaries
                 'history': [],  # List of EncodingHistory dictionaries
                 'settings': {
                     'output_directory': '',
@@ -145,22 +151,7 @@ class ExtendedMetadata:
                     'test_duration_seconds': 60
                 }
             }
-        }
-    
-    @staticmethod
-    def ensure_encoding_structure(metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure metadata has encoding structure"""
-        if 'encoding' not in metadata:
-            metadata['encoding'] = {
-                'jobs': [],
-                'history': [],
-                'settings': {
-                    'output_directory': '',
-                    'preset_name': '',
-                    'testing_mode': False,
-                    'test_duration_seconds': 60
-                }
-            }
+            return metadata
         
         # Ensure all encoding sub-structures exist
         if 'jobs' not in metadata['encoding']:

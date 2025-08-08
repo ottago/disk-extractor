@@ -248,6 +248,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
     def get_file_encoding_jobs(file_name: str) -> Union[Response, tuple]:
         """Get all encoding jobs for a specific file"""
         try:
+            logger.info(f"get_file_encoding_jobs file_name={file_name}")
             # Validate filename
             try:
                 file_name = validate_filename(file_name)
@@ -291,6 +292,8 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             
             operation = data.get('operation', '').strip().lower()
             file_names = data.get('file_names', [])
+
+            logger.info(f"bulk_queue_operations operation={operation} file_names={file_names}")
             
             if operation not in ['queue_all', 'clear_queue']:
                 return jsonify({

@@ -64,7 +64,12 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
     def file_list() -> Response:
         """Get updated file list with status"""
         try:
-            manager.scan_directory()  # Refresh the list
+            # Don't scan directory here - rely on file watcher for updates
+            # Only scan if the movies list is empty (initial load)
+            if not manager.movies and manager.directory:
+                logger.debug("Movies list empty, performing initial directory scan")
+                manager.scan_directory()
+            
             movies_data = prepare_for_template(manager.movies)
             return jsonify({'movies': movies_data})
         except Exception as e:
@@ -83,6 +88,56 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 del manager.handbrake_cache[filename]
             
             enhanced_metadata = manager.get_enhanced_metadata(filename)
+            
+            # Save the scan results to disk automatically
+            # This preserves any existing metadata while updating with scan results
+            # Load existing metadata first
+            existing_metadata = manager.load_metadata(filename)
+            
+            # Update with enhanced metadata structure, preserving existing user data
+            updated_metadata = {
+                'file_name': filename,
+                'size_mb': enhanced_metadata.get('size_mb', existing_metadata.get('size_mb', 0)),
+                'titles': []
+            }
+            
+            # Process each title from the enhanced metadata
+            for enhanced_title in enhanced_metadata.get('titles', []):
+                title_number = enhanced_title.get('title_number')
+                
+                # Find existing title data if any
+                existing_title = None
+                for existing in existing_metadata.get('titles', []):
+                    if existing.get('title_number') == title_number:
+                        existing_title = existing
+                        break
+                
+                # Create updated title preserving user selections
+                updated_title = {
+                    'title_number': title_number,
+                    'selected': existing_title.get('selected', False) if existing_title else False,
+                    'movie_name': existing_title.get('movie_name', '') if existing_title else '',
+                    'release_date': existing_title.get('release_date', '') if existing_title else '',
+                    'synopsis': existing_title.get('synopsis', '') if existing_title else '',
+                    'selected_audio_tracks': existing_title.get('selected_audio_tracks', []) if existing_title else [],
+                    'selected_subtitle_tracks': existing_title.get('selected_subtitle_tracks', []) if existing_title else []
+                }
+                
+                updated_metadata['titles'].append(updated_title)
+            
+            # Save the updated metadata to disk
+            save_success = manager.save_metadata(filename, updated_metadata)
+            if save_success:
+                logger.info(f"Scan results saved to disk for: {filename}")
+            else:
+                msg = f"Failed to save scan results to disk for: {filename}"
+                logger.warning(msg)
+                return jsonify({
+                    'success': False, 
+                    'error': msg,
+                    'filename': filename
+                })
+            
             metadata_data = prepare_for_template(enhanced_metadata)
             return jsonify({
                 'success': True, 

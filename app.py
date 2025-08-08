@@ -28,7 +28,7 @@ from utils.json_helpers import prepare_for_template
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, Config.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -272,10 +272,12 @@ def health() -> Union[Response, tuple]:
             'movie_count': len(manager.movies),
             'cache_stats': cache_stats,
             'file_watcher': watcher_stats,
+            'encoding_cache_stats': encoding_engine.get_cache_stats(),
             'config': {
                 'handbrake_timeout': Config.HANDBRAKE_TIMEOUT,
                 'max_cache_size': Config.MAX_CACHE_SIZE,
-                'cache_ttl': Config.CACHE_TTL
+                'cache_ttl': Config.CACHE_TTL,
+                'encoding_jobs_cache_ttl': Config.ENCODING_JOBS_CACHE_TTL
             }
         })
     except Exception as e:

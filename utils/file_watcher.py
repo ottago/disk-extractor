@@ -12,6 +12,8 @@ from typing import Callable, Optional, Set, Dict, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +30,7 @@ class MovieFileHandler(FileSystemEventHandler):
         """
         super().__init__()
         self.callback = callback
-        self.debounce_delay = 1.0  # Seconds to wait before processing events
+        self.debounce_delay = Config.FILE_WATCHER_DEBOUNCE_DELAY
         self.pending_events: Dict[str, Dict[str, Any]] = {}
         self.debounce_timer: Optional[threading.Timer] = None
         self.lock = threading.Lock()

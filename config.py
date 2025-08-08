@@ -50,6 +50,14 @@ class Config:
     # Logging settings
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
     
+    # File watching settings
+    FILE_WATCHER_DEBOUNCE_DELAY: float = float(os.getenv('FILE_WATCHER_DEBOUNCE_DELAY', 2.0))
+    FILE_WATCHER_ENABLED: bool = os.getenv('FILE_WATCHER_ENABLED', 'True').lower() == 'true'
+    METADATA_SAVE_FEEDBACK_DELAY: float = float(os.getenv('METADATA_SAVE_FEEDBACK_DELAY', 0.5))
+    
+    # Encoding jobs cache settings
+    ENCODING_JOBS_CACHE_TTL: int = int(os.getenv('ENCODING_JOBS_CACHE_TTL', 600))  # seconds
+    
     @classmethod
     def validate(cls) -> bool:
         """

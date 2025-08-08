@@ -53,8 +53,17 @@ class EncodingEngine:
         self.queue_thread: Optional[threading.Thread] = None
         self._lock = threading.RLock()
         
+        # Job cache to avoid frequent metadata file loading
+        self._jobs_cache: Optional[List[EncodingJob]] = None
+        self._jobs_cache_timestamp: float = 0
+        self._jobs_cache_lock = threading.RLock()
+        
         # Load settings
         self._load_settings()
+        
+        # Register for metadata change notifications if metadata_manager is available
+        if self.metadata_manager:
+            self.metadata_manager.add_change_callback(self._on_metadata_change)
     
     def start(self) -> None:
         """Start the encoding engine"""
@@ -77,6 +86,26 @@ class EncodingEngine:
             self.queue_thread.start()
             
             logger.info(f"Encoding engine started with {self.settings.max_concurrent_encodes} workers")
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get encoding jobs cache statistics
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        with self._jobs_cache_lock:
+            current_time = time.time()
+            cache_age = current_time - self._jobs_cache_timestamp if self._jobs_cache_timestamp > 0 else 0
+            
+            return {
+                'has_cache': self._jobs_cache is not None,
+                'cache_size': len(self._jobs_cache) if self._jobs_cache else 0,
+                'cache_age_seconds': round(cache_age, 2),
+                'cache_ttl_seconds': Config.ENCODING_JOBS_CACHE_TTL,
+                'cache_valid': (self._jobs_cache is not None and 
+                               cache_age < Config.ENCODING_JOBS_CACHE_TTL)
+            }
     
     def stop(self) -> None:
         """Stop the encoding engine and cancel all jobs"""
@@ -169,6 +198,9 @@ class EncodingEngine:
         # Update metadata
         self._update_job_in_metadata(job_id, job)
         
+        # Invalidate jobs cache since we added a new job
+        self._invalidate_jobs_cache()
+        
         logger.info(f"Queued encoding job: {job_id} - {movie_name}")
         self._notify_status_change(job_id, EncodingStatus.QUEUED)
         
@@ -225,6 +257,9 @@ class EncodingEngine:
                 # Update metadata
                 self._update_job_in_metadata(job_id, job)
                 
+                # Invalidate jobs cache since job status changed
+                self._invalidate_jobs_cache()
+                
                 logger.info(f"Cancelled encoding job: {job_id}")
                 self._notify_status_change(job_id, EncodingStatus.CANCELLED)
                 
@@ -251,8 +286,34 @@ class EncodingEngine:
             
             return None
     
+    def _on_metadata_change(self, change_type: str, filename: Optional[str] = None) -> None:
+        """Handle metadata changes to invalidate job cache"""
+        with self._jobs_cache_lock:
+            if self._jobs_cache is not None:
+                logger.debug(f"Invalidating jobs cache due to metadata change: {change_type} - {filename}")
+                self._jobs_cache = None
+                self._jobs_cache_timestamp = 0
+    
+    def _invalidate_jobs_cache(self) -> None:
+        """Manually invalidate the jobs cache"""
+        with self._jobs_cache_lock:
+            self._jobs_cache = None
+            self._jobs_cache_timestamp = 0
+            logger.debug("Jobs cache manually invalidated")
+    
     def get_all_jobs(self) -> List[EncodingJob]:
-        """Get all jobs (active and from metadata)"""
+        """Get all jobs (active and from metadata) with caching"""
+        current_time = time.time()
+        
+        # Check if we have a valid cache
+        with self._jobs_cache_lock:
+            if (self._jobs_cache is not None and 
+                current_time - self._jobs_cache_timestamp < Config.ENCODING_JOBS_CACHE_TTL):
+                logger.debug(f"Returning {len(self._jobs_cache)} cached jobs")
+                return self._jobs_cache.copy()
+        
+        # Cache miss or expired, rebuild the jobs list
+        logger.debug("Rebuilding jobs cache")
         jobs = []
         
         # Add active jobs
@@ -273,6 +334,12 @@ class EncodingEngine:
                             jobs.append(job)
                 except Exception as e:
                     logger.error(f"Error loading jobs from {movie['file_name']}: {e}")
+        
+        # Cache the results
+        with self._jobs_cache_lock:
+            self._jobs_cache = jobs.copy()
+            self._jobs_cache_timestamp = current_time
+            logger.debug(f"Cached {len(jobs)} jobs")
         
         return jobs
     
@@ -323,6 +390,9 @@ class EncodingEngine:
             
             # Update metadata
             self._update_job_in_metadata(job_id, job)
+            
+            # Invalidate cache since active jobs changed
+            self._invalidate_jobs_cache()
             
             logger.info(f"Started encoding job: {job_id}")
             self._notify_status_change(job_id, EncodingStatus.ENCODING)
@@ -566,6 +636,9 @@ class EncodingEngine:
             self._update_job_in_metadata(job_id, job)
             self._add_job_to_history(job)
             
+            # Invalidate cache since active jobs changed
+            self._invalidate_jobs_cache()
+            
             # Notify status change
             self._notify_status_change(job_id, job.status)
     
@@ -613,6 +686,9 @@ class EncodingEngine:
             # Update metadata
             metadata = ExtendedMetadata.set_encoding_jobs(metadata, jobs)
             self.metadata_manager.save_metadata(job.file_name, metadata)
+            
+            # Invalidate jobs cache since metadata was updated
+            self._invalidate_jobs_cache()
             
         except Exception as e:
             logger.error(f"Error updating job in metadata: {e}")
