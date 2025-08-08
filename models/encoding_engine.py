@@ -569,9 +569,10 @@ class EncodingEngine:
                                 job.progress = progress
                                 self._notify_progress(job_id, progress)
                                 
-                                # Update metadata periodically
-                                # TODO: Make this update every n seconds.
-                                if progress.percentage % 5 == 0:  # Every 5%
+                                if (progress.percentage > 0 and 
+                                    progress.percentage % 5 == 0 and 
+                                    progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
+                                    job.progress.last_saved_percentage = progress.percentage
                                     self._update_job_in_metadata(job_id, job)
                     
                     time.sleep(self.settings.progress_update_interval)
@@ -660,9 +661,8 @@ class EncodingEngine:
             if job_id in self.job_futures:
                 del self.job_futures[job_id]
             
-            # Update metadata and add to history
-            self._update_job_in_metadata(job_id, job)
-            self._add_job_to_history(job)
+            # Update metadata and add to history in a single operation
+            self._complete_job_metadata_update(job_id, job)
             
             # Invalidate cache since active jobs changed
             # FIXME: Do we really need to invalidate the cache or just update it?
@@ -721,6 +721,75 @@ class EncodingEngine:
             
         except Exception as e:
             logger.error(f"Error updating job in metadata: {e}")
+    
+    def _complete_job_metadata_update(self, job_id: str, job: EncodingJob) -> None:
+        """
+        Complete job metadata update - combines job update and history addition
+        to reduce file writes and prevent race conditions
+        """
+        if not self.metadata_manager:
+            return
+        
+        try:
+            metadata = self.metadata_manager.load_metadata(job.file_name)
+            
+            # Update job in encoding jobs list
+            jobs = ExtendedMetadata.get_encoding_jobs(metadata)
+            job_updated = False
+            for i, existing_job in enumerate(jobs):
+                if (existing_job.file_name == job.file_name and 
+                    existing_job.title_number == job.title_number and
+                    existing_job.movie_name == job.movie_name):
+                    jobs[i] = job
+                    job_updated = True
+                    break
+            
+            if not job_updated:
+                jobs.append(job)
+            
+            metadata = ExtendedMetadata.set_encoding_jobs(metadata, jobs)
+            
+            # Add to history if job is completed or failed
+            if job.status in [EncodingStatus.COMPLETED, EncodingStatus.FAILED]:
+                # Calculate encoding time
+                encoding_time = 0
+                if job.started_at and job.completed_at:
+                    try:
+                        start_time = datetime.fromisoformat(job.started_at)
+                        end_time = datetime.fromisoformat(job.completed_at)
+                        encoding_time = int((end_time - start_time).total_seconds())
+                    except ValueError:
+                        pass
+                
+                # Get output file size
+                output_size_mb = 0.0
+                if job.output_path and os.path.exists(job.output_path):
+                    output_size_mb = os.path.getsize(job.output_path) / (1024 * 1024)
+                
+                # Create history entry
+                from models.encoding_models import EncodingHistory
+                history_entry = EncodingHistory(
+                    attempt_id=f"{job.file_name}_{job.title_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    started_at=job.started_at,
+                    completed_at=job.completed_at,
+                    status=job.status,
+                    output_size_mb=output_size_mb,
+                    encoding_time_seconds=encoding_time,
+                    error_message=job.error_message,
+                    preset_used=job.preset_name
+                )
+                
+                # Add to metadata
+                metadata = ExtendedMetadata.add_encoding_history(metadata, history_entry)
+            
+            # Single atomic save operation
+            self.metadata_manager.save_metadata(job.file_name, metadata)
+            
+            # Invalidate jobs cache since metadata was updated
+            self._invalidate_jobs_cache()
+            
+        except Exception as e:
+            logger.error(f"Error completing job metadata update: {e}")
     
     def _add_job_to_history(self, job: EncodingJob) -> None:
         """Add completed job to encoding history"""

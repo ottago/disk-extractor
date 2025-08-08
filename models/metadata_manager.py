@@ -10,6 +10,9 @@ import logging
 import traceback
 import threading
 import time
+import tempfile
+import shutil
+import fcntl  # For file locking on Unix systems
 from pathlib import Path
 from datetime import datetime
 from cachetools import TTLCache
@@ -60,6 +63,10 @@ class MovieMetadataManager:
         # Track files we're currently saving to prevent feedback loops
         self._saving_files: set = set()
         self._saving_lock = threading.Lock()
+        
+        # Per-file locks to prevent concurrent writes to the same .mmm file
+        self._file_locks: Dict[str, threading.RLock] = {}
+        self._file_locks_lock = threading.Lock()
         
         # Register with file watcher
         file_watcher.add_callback(self._on_file_change)
@@ -296,7 +303,76 @@ class MovieMetadataManager:
         
         return metadata
     
+    def _get_file_lock(self, mmm_file: str) -> threading.RLock:
+        """Get or create a lock for a specific .mmm file"""
+        with self._file_locks_lock:
+            if mmm_file not in self._file_locks:
+                self._file_locks[mmm_file] = threading.RLock()
+            return self._file_locks[mmm_file]
+    
+    def _atomic_write_json(self, file_path: Path, data: Dict[str, Any]) -> None:
+        """
+        Atomically write JSON data to file using temporary file + rename
+        
+        Args:
+            file_path: Target file path
+            data: Data to write
+            
+        Raises:
+            IOError: If write fails
+        """
+        # Create temporary file in the same directory to ensure atomic rename
+        temp_fd = None
+        temp_path = None
+        
+        try:
+            # Create temporary file in same directory
+            temp_fd, temp_path = tempfile.mkstemp(
+                suffix='.tmp',
+                prefix=f'.{file_path.name}.',
+                dir=file_path.parent
+            )
+            
+            # Write JSON to temporary file
+            with os.fdopen(temp_fd, 'w', encoding='utf-8') as temp_file:
+                temp_fd = None  # File descriptor now owned by temp_file
+                json.dump(data, temp_file, indent=2, ensure_ascii=False, cls=EnumJSONEncoder)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())  # Force write to disk
+            
+            # Atomic rename (this is the atomic operation)
+            shutil.move(temp_path, file_path)
+            temp_path = None  # Successfully moved, don't clean up
+            
+        except Exception as e:
+            # Clean up on error
+            if temp_fd is not None:
+                try:
+                    os.close(temp_fd)
+                except:
+                    pass
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            raise IOError(f"Failed to write {file_path}: {e}") from e
+    
     def _get_file_size_mb(self, file_path: Path) -> Optional[float]:
+        """
+        Get file size in MB
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            File size in MB, or None if error
+        """
+        try:
+            size_bytes = file_path.stat().st_size
+            return round(size_bytes / (1024 * 1024), 1)
+        except OSError:
+            return None
         """
         Get file size in MB
         
@@ -520,7 +596,7 @@ class MovieMetadataManager:
     
     def save_metadata(self, img_file: str, metadata: Dict[str, Any]) -> bool:
         """
-        Save metadata to .mmm file
+        Save metadata to .mmm file with file locking and atomic writes
         
         Args:
             img_file: Filename of the .img file
@@ -538,38 +614,44 @@ class MovieMetadataManager:
         mmm_file = Path(img_file).stem + '.mmm'
         mmm_path = self.directory / mmm_file
         
-        # Mark this file as being saved to prevent feedback loops
-        with self._saving_lock:
-            self._saving_files.add(mmm_file)
+        # Get file-specific lock to prevent concurrent writes to the same file
+        file_lock = self._get_file_lock(mmm_file)
         
-        try:
-            with open(mmm_path, 'w', encoding='utf-8') as f:
-                json.dump(metadata, f, indent=2, ensure_ascii=False, cls=EnumJSONEncoder)
+        with file_lock:
+            # Mark this file as being saved to prevent feedback loops
+            with self._saving_lock:
+                self._saving_files.add(mmm_file)
             
-            # Update in-memory data
-            for movie in self.movies:
-                if movie['file_name'] == img_file:
-                    movie.update(metadata)
-                    movie['has_metadata'] = self._has_meaningful_metadata(metadata)
-                    break
-            
-            logger.debug(f"Successfully saved metadata for {img_file}")
-            return True
-        except (IOError, UnicodeEncodeError) as e:
-            logger.error(f"Could not save metadata for {img_file}: {e}")
-            return False
-        finally:
-            # Remove from saving set after a short delay to account for file system latency
-            def remove_from_saving():
-                time.sleep(Config.METADATA_SAVE_FEEDBACK_DELAY)
-                with self._saving_lock:
-                    self._saving_files.discard(mmm_file)
-                logger.debug(f"Removed {mmm_file} from saving tracking")
-            
-            # Use a timer to remove the file from tracking after a delay
-            import threading
-            timer = threading.Timer(Config.METADATA_SAVE_FEEDBACK_DELAY, remove_from_saving)
-            timer.start()
+            try:
+                # Use atomic write to prevent file corruption
+                self._atomic_write_json(mmm_path, metadata)
+                
+                # Update in-memory data
+                for movie in self.movies:
+                    if movie['file_name'] == img_file:
+                        movie.update(metadata)
+                        movie['has_metadata'] = self._has_meaningful_metadata(metadata)
+                        break
+                
+                logger.debug(f"Successfully saved metadata for {img_file}")
+                return True
+                
+            except (IOError, UnicodeEncodeError) as e:
+                logger.error(f"Could not save metadata for {img_file}: {e}")
+                return False
+                
+            finally:
+                # Remove from saving set after a short delay to account for file system latency
+                def remove_from_saving():
+                    time.sleep(Config.METADATA_SAVE_FEEDBACK_DELAY)
+                    with self._saving_lock:
+                        self._saving_files.discard(mmm_file)
+                    logger.debug(f"Removed {mmm_file} from saving tracking")
+                
+                # Use a timer to remove the file from tracking after a delay
+                import threading
+                timer = threading.Timer(Config.METADATA_SAVE_FEEDBACK_DELAY, remove_from_saving)
+                timer.start()
     
     def get_enhanced_metadata(self, img_file: str) -> Dict[str, Any]:
         """
