@@ -52,6 +52,7 @@ class EncodingEngine:
         self.running = False
         self.queue_thread: Optional[threading.Thread] = None
         self._lock = threading.RLock()
+        self._queue_condition = threading.Condition(self._lock)  # For event-driven processing
         
         # Job cache to avoid frequent metadata file loading
         self._jobs_cache: Optional[List[EncodingJob]] = None
@@ -116,6 +117,10 @@ class EncodingEngine:
             logger.info("Stopping encoding engine...")
             self.running = False
             
+            # Wake up the queue processor so it can exit
+            with self._queue_condition:
+                self._queue_condition.notify()
+            
             # Cancel all active jobs
             for job_id in list(self.active_jobs.keys()):
                 self.cancel_job(job_id)
@@ -149,6 +154,7 @@ class EncodingEngine:
     
     def _notify_status_change(self, job_id: str, status: EncodingStatus) -> None:
         """Notify all status callbacks"""
+        logger.info(f"Encoding Job {job_id} -> {status}")
         for callback in self.status_callbacks:
             try:
                 callback(job_id, status)
@@ -195,14 +201,18 @@ class EncodingEngine:
         # Add to queue
         self.encoding_queue.put((job_id, job))
         
+        # Notify queue processor that a new job is available
+        with self._queue_condition:
+            self._queue_condition.notify()
+        
         # Update metadata
         self._update_job_in_metadata(job_id, job)
         
         # Invalidate jobs cache since we added a new job
+        # FIXME: Do we really need to invalidate the chache or can we just update it?
         self._invalidate_jobs_cache()
         
-        logger.info(f"Queued encoding job: {job_id} - {movie_name}")
-        self._notify_status_change(job_id, EncodingStatus.QUEUED)
+        self._notify_status_change(job_id, job.status)
         
         return job_id
     
@@ -258,10 +268,10 @@ class EncodingEngine:
                 self._update_job_in_metadata(job_id, job)
                 
                 # Invalidate jobs cache since job status changed
+                # FIXME: Do we really need to invalidate the cache or just update it?
                 self._invalidate_jobs_cache()
                 
-                logger.info(f"Cancelled encoding job: {job_id}")
-                self._notify_status_change(job_id, EncodingStatus.CANCELLED)
+                self._notify_status_change(job_id, job.status)
                 
                 return True
             
@@ -344,24 +354,37 @@ class EncodingEngine:
         return jobs
     
     def _process_queue(self) -> None:
-        """Main queue processing loop"""
-        logger.info("Queue processing thread started")
+        """Main queue processing loop - event-driven, no polling"""
+        logger.info("Queue processing thread started (event-driven)")
         
         while self.running:
             try:
-                # Check if we can start more jobs
-                with self._lock:
-                    active_count = len(self.active_jobs)
-                    max_concurrent = self.settings.max_concurrent_encodes
+                with self._queue_condition:
+                    # Wait for either:
+                    # 1. New job in queue AND available worker slot
+                    # 2. Job completion (which frees up a slot)
+                    # 3. Shutdown signal
+                    while self.running:
+                        active_count = len(self.active_jobs)
+                        max_concurrent = self.settings.max_concurrent_encodes
+                        
+                        # Check if we can start a job
+                        if active_count < max_concurrent and not self.encoding_queue.empty():
+                            break
+                        
+                        # Wait for notification (job added, job completed, or shutdown)
+                        logger.debug(f"Waiting for queue event ({active_count}/{max_concurrent} active)")
+                        self._queue_condition.wait()
+                    
+                    if not self.running:
+                        break
                 
-                if active_count >= max_concurrent:
-                    time.sleep(1.0)
-                    continue
-                
-                # Get next job from queue
+                # Get next job from queue (non-blocking since we know it's not empty)
                 try:
-                    job_id, job = self.encoding_queue.get(timeout=1.0)
-                except Empty:
+                    job_id, job = self.encoding_queue.get_nowait()
+                    logger.debug(f"Got job from queue: {job_id}")
+                except:
+                    # Queue became empty between check and get - continue loop
                     continue
                 
                 # Start the job
@@ -369,13 +392,14 @@ class EncodingEngine:
                 
             except Exception as e:
                 logger.error(f"Error in queue processing: {e}")
-                time.sleep(1.0)
+                time.sleep(1.0)  # Brief pause on error
         
         logger.info("Queue processing thread stopped")
     
     def _start_encoding_job(self, job_id: str, job: EncodingJob) -> None:
         """Start an individual encoding job"""
         with self._lock:
+            logger.debug(f"Starting encode of {job_id}")
             if not self.running or not self.executor:
                 return
             
@@ -392,10 +416,10 @@ class EncodingEngine:
             self._update_job_in_metadata(job_id, job)
             
             # Invalidate cache since active jobs changed
+            # FIXME: Do we really need to invalidate the cache or just update it?
             self._invalidate_jobs_cache()
             
-            logger.info(f"Started encoding job: {job_id}")
-            self._notify_status_change(job_id, EncodingStatus.ENCODING)
+            self._notify_status_change(job_id, job.status)
     
     def _execute_encoding_job(self, job_id: str, job: EncodingJob) -> None:
         """Execute the actual encoding job"""
@@ -628,6 +652,10 @@ class EncodingEngine:
             if job_id in self.active_jobs:
                 del self.active_jobs[job_id]
             
+            # Notify queue processor that a worker slot is now available
+            with self._queue_condition:
+                self._queue_condition.notify()
+            
             # Clean up future reference
             if job_id in self.job_futures:
                 del self.job_futures[job_id]
@@ -637,6 +665,7 @@ class EncodingEngine:
             self._add_job_to_history(job)
             
             # Invalidate cache since active jobs changed
+            # FIXME: Do we really need to invalidate the cache or just update it?
             self._invalidate_jobs_cache()
             
             # Notify status change

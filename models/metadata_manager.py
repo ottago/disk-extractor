@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 from cachetools import TTLCache
 from typing import Dict, List, Any, Optional, Union, Callable
+from enum import Enum
 
 from config import Config
 from models.handbrake_scanner import HandBrakeScanner, HandBrakeError
@@ -23,6 +24,14 @@ from utils.validation import validate_filename, ValidationError
 from utils.file_watcher import file_watcher
 
 logger = logging.getLogger(__name__)
+
+
+class EnumJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Enum objects"""
+    def default(self, obj):
+        if isinstance(obj, Enum):
+            return obj.value
+        return super().default(obj)
 
 
 class MetadataError(Exception):
@@ -89,6 +98,8 @@ class MovieMetadataManager:
     
     def _on_file_change(self, event_type: str, file_path: str, file_type: str) -> None:
         """Handle file system changes"""
+        # XXX
+        return
         try:
             file_path_obj = Path(file_path)
             
@@ -116,7 +127,7 @@ class MovieMetadataManager:
         if file_type == 'movie' and file_path.suffix.lower() == '.img':
             # New movie file added
             logger.info(f"New movie file detected: {file_path.name}")
-	    # FIXME: Do we really need to rescan the directory when a new file is added?
+            # FIXME: Do we really need to rescan the directory when a new file is added?
             self.scan_directory()  # Refresh the entire list
             self._notify_change('added', file_path.name)
         elif file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
@@ -533,7 +544,7 @@ class MovieMetadataManager:
         
         try:
             with open(mmm_path, 'w', encoding='utf-8') as f:
-                json.dump(metadata, f, indent=2, ensure_ascii=False)
+                json.dump(metadata, f, indent=2, ensure_ascii=False, cls=EnumJSONEncoder)
             
             # Update in-memory data
             for movie in self.movies:
