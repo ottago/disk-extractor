@@ -137,7 +137,17 @@ def notify_encoding_status_change(job_id: str, status: EncodingStatus) -> None:
         logger.debug(f"Sent status change for job: {job_id} - {status.value}")
         
         # Also trigger file list update since encoding status affects file display
-        notify_file_changes('encoding_status_updated', job_id.split('_')[0])
+        # Extract filename from job_id (format: filename_title_hash)
+        # Split by '_' and take all parts except the last two (title and hash)
+        parts = job_id.split('_')
+        if len(parts) >= 3:
+            # Rejoin all parts except the last two
+            filename = '_'.join(parts[:-2])
+        else:
+            # Fallback to first part if format is unexpected
+            filename = parts[0]
+        
+        notify_file_changes('encoding_status_updated', filename)
     except Exception as e:
         logger.error(f"Error notifying encoding status change: {e}")
 
@@ -329,6 +339,29 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     # Initialize and start encoding engine
     encoding_engine.add_progress_callback(notify_encoding_progress)
     encoding_engine.add_status_callback(notify_encoding_status_change)
+    
+    # Add notification handler
+    def handle_notification(notification_data):
+        """Handle encoding notifications"""
+        notification_type = notification_data.get('type', 'unknown')
+        message = notification_data.get('message', '')
+        job_data = notification_data.get('job')
+        
+        logger.info(f"📢 Notification [{notification_type.upper()}]: {message}")
+        
+        # You could extend this to send actual notifications (email, desktop, etc.)
+        # For now, we just log them
+        
+        # Optionally send via WebSocket to connected clients
+        if socketio:
+            socketio.emit('notification', {
+                'type': notification_type,
+                'message': message,
+                'timestamp': notification_data.get('timestamp'),
+                'job': job_data
+            })
+    
+    encoding_engine.add_notification_callback(handle_notification)
     encoding_engine.start()
     
     # Register API routes
@@ -340,12 +373,17 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     app.register_blueprint(encoding_bp)
     
     # Register settings API routes
-    settings_bp = create_settings_routes(encoding_engine)
+    settings_bp = create_settings_routes(encoding_engine, socketio)
     app.register_blueprint(settings_bp)
     
     # Register template API routes
     template_bp = create_template_routes(encoding_engine.get_template_manager())
     app.register_blueprint(template_bp)
+    
+    # Register directory API routes
+    from api.directory_routes import create_directory_routes
+    directory_bp = create_directory_routes()
+    app.register_blueprint(directory_bp)
     
     return app
 

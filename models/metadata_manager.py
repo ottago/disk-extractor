@@ -105,8 +105,6 @@ class MovieMetadataManager:
     
     def _on_file_change(self, event_type: str, file_path: str, file_type: str) -> None:
         """Handle file system changes"""
-        # XXX
-        return
         try:
             file_path_obj = Path(file_path)
             
@@ -225,11 +223,11 @@ class MovieMetadataManager:
             raise MetadataError(f"Invalid directory: {e}")
         
         # Start watching the new directory
-        if file_watcher.start_watching(self.directory):
-            logger.info(f"Started file watching for: {self.directory}")
-        else:
-            logger.warning(f"Failed to start file watching for: {self.directory}")
-        
+        # NKW if file_watcher.start_watching(self.directory):
+        # NKW     logger.info(f"Started file watching for: {self.directory}")
+        # NKW else:
+        # NKW     logger.warning(f"Failed to start file watching for: {self.directory}")
+
         self.scan_directory()
     
     def scan_directory(self) -> None:

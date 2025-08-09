@@ -845,3 +845,264 @@ window.onclick = function(event) {
         closeRawOutputModal();
     }
 }
+
+// Stats for Nerds functionality
+let statsUpdateInterval = null;
+let statsEnabled = false;
+
+function initializeStatsForNerds() {
+    // Check if stats are enabled from settings
+    checkStatsSettings();
+}
+
+async function checkStatsSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        
+        if (data.success) {
+            const enabled = data.settings.stats_for_nerds || false;
+            toggleStatsForNerds(enabled);
+        }
+    } catch (error) {
+        console.error('Error checking stats settings:', error);
+    }
+}
+
+function toggleStatsForNerds(enabled) {
+    statsEnabled = enabled;
+    const statsSection = document.getElementById('statsForNerds');
+    const fileList = document.querySelector('.file-list');
+    
+    if (enabled) {
+        statsSection.classList.remove('hidden');
+        if (fileList) {
+            fileList.style.paddingBottom = '210px'; // Space for stats section
+        }
+        startStatsUpdates();
+    } else {
+        statsSection.classList.add('hidden');
+        if (fileList) {
+            fileList.style.paddingBottom = '20px'; // Normal padding
+        }
+        stopStatsUpdates();
+    }
+}
+
+function startStatsUpdates() {
+    // Update immediately
+    updateStats();
+    
+    // Then update every 5 seconds
+    if (statsUpdateInterval) {
+        clearInterval(statsUpdateInterval);
+    }
+    statsUpdateInterval = setInterval(updateStats, 5000);
+}
+
+function stopStatsUpdates() {
+    if (statsUpdateInterval) {
+        clearInterval(statsUpdateInterval);
+        statsUpdateInterval = null;
+    }
+}
+
+async function updateStats() {
+    if (!statsEnabled) return;
+    
+    try {
+        // Fetch both health and encoding data in parallel
+        const [healthResponse, encodingResponse] = await Promise.all([
+            fetch('/health'),
+            fetch('/api/encoding/status')
+        ]);
+        
+        if (!healthResponse.ok) {
+            throw new Error(`Health endpoint error: HTTP ${healthResponse.status}`);
+        }
+        
+        if (!encodingResponse.ok) {
+            throw new Error(`Encoding endpoint error: HTTP ${encodingResponse.status}`);
+        }
+        
+        const healthData = await healthResponse.json();
+        const encodingData = await encodingResponse.json();
+        
+        // Validate that we got some data
+        if (!healthData || typeof healthData !== 'object') {
+            throw new Error('Invalid health data received');
+        }
+        
+        if (!encodingData || typeof encodingData !== 'object') {
+            throw new Error('Invalid encoding data received');
+        }
+        
+        displayStats(healthData, encodingData);
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        displayStatsError(error.message);
+    }
+}
+
+function displayStats(healthData, encodingData = null) {
+    const statsContent = document.getElementById('statsContent');
+    
+    // Helper function to safely get nested properties
+    const safeGet = (obj, path, defaultValue = 'N/A') => {
+        try {
+            return path.split('.').reduce((current, key) => current && current[key], obj) ?? defaultValue;
+        } catch {
+            return defaultValue;
+        }
+    };
+    
+    // Helper function to get status class
+    const getStatusClass = (value, goodValues = [true, 'ok', 'available']) => {
+        if (goodValues.includes(value)) return 'good';
+        if (value === false || value === 'error' || value === 'unavailable') return 'error';
+        if (typeof value === 'number' && value > 0) return 'warning';
+        return '';
+    };
+    
+    // Build encoding section if we have encoding data
+    let encodingSection = '';
+    if (encodingData && encodingData.success) {
+        const summary = safeGet(encodingData, 'summary', {});
+        encodingSection = `
+            <div class="stats-section">
+                <h5>Encoding Jobs</h5>
+                <div class="stats-grid">
+                    <div class="stats-item">
+                        <span class="stats-label">Active:</span>
+                        <span class="stats-value ${getStatusClass(summary.encoding_count, [0])}">${summary.encoding_count || 0}</span>
+                    </div>
+                    <div class="stats-item">
+                        <span class="stats-label">Queued:</span>
+                        <span class="stats-value ${getStatusClass(summary.queued_count, [0])}">${summary.queued_count || 0}</span>
+                    </div>
+                    <div class="stats-item">
+                        <span class="stats-label">Completed:</span>
+                        <span class="stats-value good">${summary.completed_count || 0}</span>
+                    </div>
+                    <div class="stats-item">
+                        <span class="stats-label">Failed:</span>
+                        <span class="stats-value ${summary.failed_count > 0 ? 'error' : 'good'}">${summary.failed_count || 0}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    const html = `
+        <div class="stats-section">
+            <h5>System</h5>
+            <div class="stats-grid">
+                <div class="stats-item">
+                    <span class="stats-label">Status:</span>
+                    <span class="stats-value ${getStatusClass(safeGet(healthData, 'status'), ['ok'])}">${safeGet(healthData, 'status', 'Unknown')}</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Movies:</span>
+                    <span class="stats-value">${safeGet(healthData, 'movie_count', 0)}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h5>HandBrake</h5>
+            <div class="stats-grid">
+                <div class="stats-item">
+                    <span class="stats-label">Status:</span>
+                    <span class="stats-value ${getStatusClass(safeGet(healthData, 'handbrake'), ['available'])}">${safeGet(healthData, 'handbrake', 'Unknown')}</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Timeout:</span>
+                    <span class="stats-value">${safeGet(healthData, 'config.handbrake_timeout', 'N/A')}s</span>
+                </div>
+            </div>
+        </div>
+        
+        ${encodingSection}
+        
+        <div class="stats-section">
+            <h5>Cache & Watcher</h5>
+            <div class="stats-grid">
+                <div class="stats-item">
+                    <span class="stats-label">Cache:</span>
+                    <span class="stats-value">${safeGet(healthData, 'cache_stats.size', 0)}/${safeGet(healthData, 'cache_stats.max_size', 0)}</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Enc Cache:</span>
+                    <span class="stats-value ${getStatusClass(safeGet(healthData, 'encoding_cache_stats.cache_valid'), [true])}">${safeGet(healthData, 'encoding_cache_stats.cache_size', 0)}</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Watching:</span>
+                    <span class="stats-value ${getStatusClass(safeGet(healthData, 'file_watcher.is_watching'), [true])}">${safeGet(healthData, 'file_watcher.is_watching') === true ? 'Yes' : 'No'}</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-label">Observer:</span>
+                    <span class="stats-value ${getStatusClass(safeGet(healthData, 'file_watcher.observer_alive'), [true])}">${safeGet(healthData, 'file_watcher.observer_alive') === true ? 'OK' : 'Dead'}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats-timestamp">
+            Last updated: ${new Date().toLocaleTimeString()}
+        </div>
+    `;
+    
+    statsContent.innerHTML = html;
+}
+
+function displayStatsError(errorMessage = 'Unknown error') {
+    const statsContent = document.getElementById('statsContent');
+    statsContent.innerHTML = `
+        <div class="stats-loading" style="color: #dc3545;">
+            ❌ Error loading stats
+        </div>
+        <div class="stats-section">
+            <div style="font-size: 0.65rem; color: #6c757d; text-align: center; margin-top: 0.5rem;">
+                ${errorMessage}
+            </div>
+        </div>
+        <div class="stats-timestamp">
+            Last updated: ${new Date().toLocaleTimeString()}
+        </div>
+    `;
+}
+
+function formatUptime(seconds) {
+    if (!seconds || typeof seconds !== 'number' || seconds < 0) {
+        return 'Unknown';
+    }
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 24) {
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+        return `${days}d ${remainingHours}h`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+    } else {
+        return `${secs}s`;
+    }
+}
+
+// Initialize stats when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeStatsForNerds();
+});
+
+// Listen for settings changes via WebSocket
+if (typeof socket !== 'undefined') {
+    socket.on('settings_updated', function(data) {
+        if (data.settings && 'stats_for_nerds' in data.settings) {
+            toggleStatsForNerds(data.settings.stats_for_nerds);
+        }
+    });
+}

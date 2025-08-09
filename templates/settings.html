@@ -51,13 +51,19 @@
                 
                 <div class="form-group">
                     <label for="outputDirectory">Output Directory</label>
-                    <input type="text" id="outputDirectory" name="output_directory" placeholder="/path/to/encoded/movies">
-                    <div class="help-text">Directory where encoded files will be saved. Leave empty to use the same directory as source files.</div>
+                    <div class="input-group">
+                        <input type="text" id="outputDirectory" name="output_directory" placeholder="/encoded (relative to movies directory)">
+                        <button type="button" id="browseOutputDir" class="btn btn-secondary">Browse</button>
+                    </div>
+                    <div class="help-text">Directory where encoded files will be saved (relative to movies directory). Leave empty to use the same directory as source files.</div>
                 </div>
                 
                 <div class="form-group">
                     <label for="defaultPreset">Default HandBrake Preset</label>
-                    <input type="text" id="defaultPreset" name="default_preset" placeholder="Fast 1080p30">
+                    <select id="defaultPreset" name="default_preset">
+                        <option value="">Select a preset...</option>
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
                     <div class="help-text">Default HandBrake preset to use for encoding jobs.</div>
                 </div>
             </div>
@@ -125,6 +131,19 @@
                         <input type="checkbox" id="notifyQueueEmpty" name="notification_settings.on_queue_empty">
                         Notify when encoding queue is empty
                     </label>
+                </div>
+            </div>
+            
+            <!-- Display Options -->
+            <div class="settings-section">
+                <h3>Display Options</h3>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="statsForNerds" name="stats_for_nerds">
+                        Stats for Nerds
+                    </label>
+                    <div class="help-text">Show detailed system health information at the bottom of the main page.</div>
                 </div>
             </div>
             

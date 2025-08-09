@@ -50,15 +50,22 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
     def upload_template() -> Union[Response, tuple]:
         """Upload a new HandBrake template"""
         try:
+            logger.info(f"Template upload request received. Files: {list(request.files.keys())}")
+            logger.info(f"Form data: {dict(request.form)}")
+            
             # Check if file was uploaded
             if 'template' not in request.files:
+                logger.warning("No template file in request")
                 return jsonify({
                     'success': False,
                     'error': 'No template file provided'
                 }), 400
             
             file = request.files['template']
+            logger.info(f"File received: {file.filename}, content_type: {file.content_type}")
+            
             if file.filename == '':
+                logger.warning("Empty filename")
                 return jsonify({
                     'success': False,
                     'error': 'No file selected'
@@ -66,6 +73,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
             
             # Validate file type
             if not file.filename.lower().endswith('.json'):
+                logger.warning(f"Invalid file type: {file.filename}")
                 return jsonify({
                     'success': False,
                     'error': 'Template must be a .json file'
@@ -73,51 +81,148 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
             
             # Read and parse JSON
             try:
-                template_data = json.loads(file.read().decode('utf-8'))
+                file_content = file.read().decode('utf-8')
+                logger.info(f"File content length: {len(file_content)} characters")
+                template_data = json.loads(file_content)
+                logger.info(f"JSON parsed successfully. Keys: {list(template_data.keys())}")
             except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {e}")
                 return jsonify({
                     'success': False,
                     'error': f'Invalid JSON format: {str(e)}'
                 }), 400
             except UnicodeDecodeError as e:
+                logger.error(f"Unicode decode error: {e}")
                 return jsonify({
                     'success': False,
                     'error': f'Invalid file encoding: {str(e)}'
                 }), 400
             
-            # Extract template name
-            template_name = template_data.get('PresetName')
-            if not template_name:
+            # Handle different template formats
+            templates_to_save = []
+            
+            # Check if this is a HandBrake export file with PresetList
+            if 'PresetList' in template_data:
+                logger.info("Detected HandBrake export file with PresetList")
+                preset_list = template_data.get('PresetList', [])
+                if not preset_list:
+                    return jsonify({
+                        'success': False,
+                        'error': 'PresetList is empty'
+                    }), 400
+                
+                for preset in preset_list:
+                    if 'PresetName' in preset:
+                        templates_to_save.append(preset)
+                    else:
+                        logger.warning(f"Preset missing PresetName: {preset.keys()}")
+                
+                if not templates_to_save:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No valid presets found in PresetList (all missing PresetName)'
+                    }), 400
+                    
+            # Check if this is a single preset
+            elif 'PresetName' in template_data:
+                logger.info("Detected single preset template")
+                templates_to_save.append(template_data)
+            else:
+                logger.warning("Template format not recognized")
                 return jsonify({
                     'success': False,
-                    'error': 'Template missing PresetName field'
+                    'error': 'Invalid template format. Must contain either "PresetName" or "PresetList"'
                 }), 400
             
-            # Sanitize template name
-            template_name = secure_filename(template_name)
-            if not template_name:
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid template name'
-                }), 400
+            # Save all templates
+            saved_templates = []
+            failed_templates = []
             
-            # Save template
-            success = template_manager.save_template(template_name, template_data)
+            for template in templates_to_save:
+                template_name = template.get('PresetName')
+                if not template_name:
+                    failed_templates.append({
+                        'name': '(unnamed preset)',
+                        'error': 'Missing PresetName field'
+                    })
+                    continue
+                
+                # Sanitize template name
+                sanitized_name = secure_filename(template_name)
+                logger.info(f"Processing template: {template_name} -> {sanitized_name}")
+                
+                if not sanitized_name:
+                    logger.warning(f"Template name became empty after sanitization: {template_name}")
+                    failed_templates.append({
+                        'name': template_name,
+                        'error': 'Invalid characters in template name'
+                    })
+                    continue
+                
+                # Save template
+                logger.info(f"Attempting to save template: {sanitized_name}")
+                success, error_message = template_manager.save_template(sanitized_name, template)
+                
+                if success:
+                    logger.info(f"Template saved successfully: {sanitized_name}")
+                    saved_templates.append(sanitized_name)
+                else:
+                    logger.error(f"Failed to save template: {sanitized_name} - {error_message}")
+                    failed_templates.append({
+                        'name': template_name,
+                        'error': error_message
+                    })
             
-            if success:
+            # Return results
+            if saved_templates and not failed_templates:
+                # All succeeded
+                if len(saved_templates) == 1:
+                    message = f'Template "{saved_templates[0]}" uploaded successfully'
+                else:
+                    message = f'{len(saved_templates)} templates uploaded successfully: {", ".join(saved_templates)}'
+                
                 return jsonify({
                     'success': True,
-                    'message': f'Template "{template_name}" uploaded successfully',
-                    'template_name': template_name
+                    'message': message,
+                    'saved_templates': saved_templates
+                })
+            elif saved_templates and failed_templates:
+                # Partial success
+                message = f'{len(saved_templates)} templates uploaded successfully: {", ".join(saved_templates)}. '
+                failed_names = [f['name'] for f in failed_templates]
+                message += f'{len(failed_templates)} failed: {", ".join(failed_names)}'
+                
+                # Include detailed error information
+                detailed_errors = []
+                for failed in failed_templates:
+                    detailed_errors.append(f"{failed['name']}: {failed['error']}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'saved_templates': saved_templates,
+                    'failed_templates': failed_templates,
+                    'detailed_errors': detailed_errors
                 })
             else:
+                # All failed
+                if len(failed_templates) == 1:
+                    error_msg = f'Failed to save template "{failed_templates[0]["name"]}": {failed_templates[0]["error"]}'
+                else:
+                    error_msg = f'Failed to save {len(failed_templates)} templates. '
+                    detailed_errors = []
+                    for failed in failed_templates:
+                        detailed_errors.append(f"{failed['name']}: {failed['error']}")
+                    error_msg += " Details: " + "; ".join(detailed_errors)
+                
                 return jsonify({
                     'success': False,
-                    'error': 'Failed to save template'
+                    'error': error_msg,
+                    'failed_templates': failed_templates
                 }), 500
                 
         except Exception as e:
-            logger.error(f"Error uploading template: {e}")
+            logger.error(f"Error uploading template: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'

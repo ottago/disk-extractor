@@ -65,6 +65,9 @@ class EncodingEngine:
         # Register for metadata change notifications if metadata_manager is available
         if self.metadata_manager:
             self.metadata_manager.add_change_callback(self._on_metadata_change)
+        
+        # Notification callbacks
+        self._notification_callbacks = []
     
     def start(self) -> None:
         """Start the encoding engine"""
@@ -206,7 +209,7 @@ class EncodingEngine:
             self._queue_condition.notify()
         
         # Update metadata
-        self._update_job_in_metadata(job_id, job)
+        self._persist_job_status(job_id, job)
         
         # Invalidate jobs cache since we added a new job
         # FIXME: Do we really need to invalidate the chache or can we just update it?
@@ -265,7 +268,7 @@ class EncodingEngine:
                 del self.active_jobs[job_id]
                 
                 # Update metadata
-                self._update_job_in_metadata(job_id, job)
+                self._persist_job_status(job_id, job)
                 
                 # Invalidate jobs cache since job status changed
                 # FIXME: Do we really need to invalidate the cache or just update it?
@@ -392,7 +395,7 @@ class EncodingEngine:
                 
             except Exception as e:
                 logger.error(f"Error in queue processing: {e}")
-                time.sleep(1.0)  # Brief pause on error
+                time.sleep(10.0)  # Pause on error
         
         logger.info("Queue processing thread stopped")
     
@@ -413,7 +416,7 @@ class EncodingEngine:
             self.job_futures[job_id] = future
             
             # Update metadata
-            self._update_job_in_metadata(job_id, job)
+            self._persist_job_status(job_id, job)
             
             # Invalidate cache since active jobs changed
             # FIXME: Do we really need to invalidate the cache or just update it?
@@ -442,11 +445,53 @@ class EncodingEngine:
             with self._lock:
                 self.job_processes[job_id] = process
             
-            # Monitor progress
-            self._monitor_encoding_progress(job_id, job, process)
+            # Monitor progress and wait for completion in the same thread
+            stdout_lines = []
+            stderr_lines = []
             
-            # Wait for completion
-            stdout, stderr = process.communicate()
+            # Read output line by line while process is running
+            while process.poll() is None:
+                if not self.running:
+                    process.terminate()
+                    break
+                
+                # Read stderr for progress information
+                if process.stderr:
+                    line = process.stderr.readline()
+                    if line:
+                        logger.debug(f"{job_id} STDERR: {line}")
+                        stderr_lines.append(line)
+                        progress = self._parse_handbrake_progress(line.strip())
+                        if progress:
+                            job.progress = progress
+                            self._notify_progress(job_id, progress)
+                            
+                            # Save progress periodically
+                            if (progress.percentage > 0 and 
+                                progress.percentage % 5 == 0 and 
+                                progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
+                                job.progress.last_saved_percentage = progress.percentage
+                                self._persist_job_status(job_id, job)
+                
+                # Read stdout to prevent buffer overflow
+                if process.stdout:
+                    logger.debug(f"{job_id} STDOUT: {line}")
+                    stdout_line = process.stdout.readline()
+                    if stdout_line:
+                        stdout_lines.append(stdout_line)
+                
+                # NKW time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+            
+            # Get any remaining output
+            remaining_stdout, remaining_stderr = process.communicate()
+            if remaining_stdout:
+                stdout_lines.append(remaining_stdout)
+            if remaining_stderr:
+                stderr_lines.append(remaining_stderr)
+            
+            # Combine all output
+            stdout = ''.join(stdout_lines)
+            stderr = ''.join(stderr_lines)
             
             # Clean up process reference
             with self._lock:
@@ -455,9 +500,11 @@ class EncodingEngine:
             
             # Handle completion
             if process.returncode == 0:
+                logger.info(f"HandBrake completed successfully for {job_id}")
                 self._handle_job_completion(job_id, job, True)
             else:
                 error_msg = f"HandBrake failed with exit code {process.returncode}: {stderr}"
+                logger.error(f"HandBrake failed for {job_id}: {error_msg}")
                 self._handle_job_completion(job_id, job, False, error_msg)
                 
         except Exception as e:
@@ -471,6 +518,10 @@ class EncodingEngine:
             raise ValueError("No metadata manager or directory set")
         
         input_path = self.metadata_manager.directory / job.file_name
+        
+        # Validate input file exists
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input file not found: {input_path}")
         
         # Generate output filename using template manager
         try:
@@ -496,7 +547,33 @@ class EncodingEngine:
             logger.warning(f"Error generating output filename: {e}")
             output_filename = self._generate_output_filename(job.movie_name, job.preset_name)
         
-        output_path = Path(self.settings.output_directory) / output_filename
+        # Handle output directory path
+        output_dir = self.settings.output_directory.strip()
+        if output_dir:
+            # If output directory is specified, treat it as relative to movies directory
+            if not output_dir.startswith('/'):
+                output_dir = '/' + output_dir
+            
+            # Convert relative path to absolute path within movies directory
+            if self.metadata_manager and self.metadata_manager.directory:
+                movies_root = Path(self.metadata_manager.directory)
+                if output_dir.startswith('/'):
+                    # Remove leading slash and join with movies directory
+                    rel_path = output_dir[1:] if output_dir != '/' else ''
+                    output_path = movies_root / rel_path / output_filename
+                else:
+                    output_path = movies_root / output_dir / output_filename
+            else:
+                # Fallback to treating as absolute path
+                output_path = Path(output_dir) / output_filename
+        else:
+            # Use same directory as source file
+            if self.metadata_manager and self.metadata_manager.directory:
+                source_path = Path(self.metadata_manager.directory) / job.file_name
+                output_path = source_path.parent / output_filename
+            else:
+                # Fallback - this shouldn't happen in normal operation
+                output_path = Path(output_filename)
         
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -504,89 +581,37 @@ class EncodingEngine:
         # Store output path in job
         job.output_path = str(output_path)
         
-        try:
-            # Get enhanced metadata for track selection
-            enhanced_metadata = self.metadata_manager.get_enhanced_metadata(job.file_name)
-            
-            # Extract selected audio and subtitle tracks
-            audio_tracks, subtitle_tracks = self.template_manager.extract_metadata_tracks(
-                enhanced_metadata, job.title_number
-            )
-            
-            # Build command using template manager
-            cmd = self.template_manager.build_handbrake_command(
-                input_file=input_path,
-                output_file=output_path,
-                template_name=job.preset_name,
-                title_number=job.title_number,
-                audio_tracks=audio_tracks,
-                subtitle_tracks=subtitle_tracks,
-                testing_mode=self.settings.testing_mode,
-                test_duration=self.settings.test_duration_seconds
-            )
-            
-            logger.info(f"Built HandBrake command with template: {job.preset_name}")
-            return cmd
-            
-        except Exception as e:
-            logger.warning(f"Error building command with template: {e}")
-            
-            # Fallback to basic command
-            cmd = [
-                Config.HANDBRAKE_CLI_PATH,
-                '--input', str(input_path),
-                '--output', str(output_path),
-                '--title', str(job.title_number)
-            ]
-            
-            # Add preset if available
-            if job.preset_name:
-                cmd.extend(['--preset', job.preset_name])
-            
-            # Add testing mode parameters if enabled
-            if self.settings.testing_mode:
-                cmd.extend([
-                    '--start-at', 'seconds:0',
-                    '--stop-at', f'seconds:{self.settings.test_duration_seconds}'
-                ])
-            
-            return cmd
-    
-    def _monitor_encoding_progress(self, job_id: str, job: EncodingJob, process: subprocess.Popen) -> None:
-        """Monitor encoding progress in a separate thread"""
-        def monitor():
-            try:
-                while process.poll() is None:
-                    if not self.running:
-                        break
-                    
-                    # Read stderr for progress information
-                    if process.stderr:
-                        line = process.stderr.readline()
-                        if line:
-                            progress = self._parse_handbrake_progress(line.strip())
-                            if progress:
-                                job.progress = progress
-                                self._notify_progress(job_id, progress)
-                                
-                                if (progress.percentage > 0 and 
-                                    progress.percentage % 5 == 0 and 
-                                    progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
-                                    job.progress.last_saved_percentage = progress.percentage
-                                    self._update_job_in_metadata(job_id, job)
-                    
-                    time.sleep(self.settings.progress_update_interval)
-                    
-            except Exception as e:
-                logger.error(f"Error monitoring progress for {job_id}: {e}")
+        # Get enhanced metadata for track selection
+        enhanced_metadata = self.metadata_manager.get_enhanced_metadata(job.file_name)
         
-        # Start monitoring thread
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        monitor_thread.start()
-    
+        # Extract selected audio and subtitle tracks
+        audio_tracks, subtitle_tracks = self.template_manager.extract_metadata_tracks(
+            enhanced_metadata, job.title_number
+        )
+        
+        # Build command using template manager
+        cmd = self.template_manager.build_handbrake_command(
+            input_file=input_path,
+            output_file=output_path,
+            template_name=job.preset_name,
+            title_number=job.title_number,
+            audio_tracks=audio_tracks,
+            subtitle_tracks=subtitle_tracks,
+            testing_mode=self.settings.testing_mode,
+            test_duration=self.settings.test_duration_seconds
+        )
+        
+        logger.info(f"Built HandBrake command with template: {job.preset_name}")
+        return cmd
+   
+
     def _parse_handbrake_progress(self, line: str) -> Optional[EncodingProgress]:
         """Parse HandBrake progress from stderr output"""
         try:
+            # Log the line for debugging
+            if "Encoding:" in line or "Scanning" in line or "%" in line:
+                logger.debug(f"HandBrake output: {line}")
+            
             # HandBrake progress format: "Encoding: task 1 of 1, 45.67 % (123.45 fps, avg 98.76 fps, ETA 01h23m45s)"
             progress_match = re.search(r'Encoding:.*?(\d+\.?\d*)\s*%.*?(\d+\.?\d*)\s*fps.*?ETA\s*(\d+h)?(\d+m)?(\d+s)?', line)
             
@@ -601,21 +626,27 @@ class EncodingEngine:
                 
                 time_remaining = eta_hours * 3600 + eta_minutes * 60 + eta_seconds
                 
-                return EncodingProgress(
+                progress = EncodingProgress(
                     percentage=percentage,
                     fps=fps,
                     time_remaining=time_remaining,
                     phase=EncodingPhase.ENCODING,
                     last_updated=datetime.now().isoformat()
                 )
+                
+                logger.debug(f"Parsed progress: {percentage}% at {fps} fps")
+                return progress
             
             # Check for scanning phase
             if "Scanning title" in line:
-                return EncodingProgress(
+                progress = EncodingProgress(
                     percentage=0.0,
                     phase=EncodingPhase.SCANNING,
                     last_updated=datetime.now().isoformat()
                 )
+
+                logger.debug("Detected scanning phase")
+                return progress
             
             # Check for muxing phase
             if "Muxing" in line:
@@ -639,10 +670,24 @@ class EncodingEngine:
                 job.progress.percentage = 100.0
                 job.progress.phase = EncodingPhase.COMPLETED
                 logger.info(f"Encoding job completed successfully: {job_id}")
+                
+                # Send completion notification
+                self._send_notification(
+                    'completion',
+                    f"Encoding completed successfully: {job.file_name}",
+                    job
+                )
             else:
                 job.status = EncodingStatus.FAILED
                 job.error_message = error_msg
                 logger.error(f"Encoding job failed: {job_id} - {error_msg}")
+                
+                # Send failure notification
+                self._send_notification(
+                    'failure',
+                    f"Encoding failed: {job.file_name} - {error_msg}",
+                    job
+                )
                 
                 # Clean up failed output file
                 self._cleanup_output_file(job)
@@ -664,13 +709,17 @@ class EncodingEngine:
             # Update metadata and add to history in a single operation
             self._complete_job_metadata_update(job_id, job)
             
+            # Check if queue is empty and send notification
+            self._check_queue_empty_notification()
+            
             # Invalidate cache since active jobs changed
             # FIXME: Do we really need to invalidate the cache or just update it?
             self._invalidate_jobs_cache()
             
             # Notify status change
             self._notify_status_change(job_id, job.status)
-    
+
+
     def _cleanup_output_file(self, job: EncodingJob) -> None:
         """Clean up output file on failure/cancellation"""
         if job.output_path and os.path.exists(job.output_path):
@@ -679,7 +728,8 @@ class EncodingEngine:
                 logger.info(f"Cleaned up output file: {job.output_path}")
             except Exception as e:
                 logger.error(f"Error cleaning up output file {job.output_path}: {e}")
-    
+
+
     def _generate_output_filename(self, movie_name: str, preset_name: str) -> str:
         """Generate output filename based on movie name and preset"""
         # Sanitize movie name for filename
@@ -689,8 +739,9 @@ class EncodingEngine:
         extension = "mp4"  # TODO: Extract from preset
         
         return f"{safe_name}.{extension}"
-    
-    def _update_job_in_metadata(self, job_id: str, job: EncodingJob) -> None:
+
+
+    def _persist_job_status(self, job_id: str, job: EncodingJob) -> None:
         """Update job in metadata file"""
         if not self.metadata_manager:
             return
@@ -828,12 +879,16 @@ class EncodingEngine:
             
         except Exception as e:
             logger.error(f"Error adding job to history: {e}")
-    
+
+
     def _load_settings(self) -> None:
         """Load encoding settings from file"""
-        # Use absolute path for settings file to avoid container issues
+        # Use settings directory for settings file
         app_dir = Path(__file__).parent.parent
-        settings_path = app_dir / "encoding_settings.json"
+        settings_path = app_dir / "settings" / "settings.json"
+        
+        # Ensure settings directory exists
+        settings_path.parent.mkdir(exist_ok=True)
         
         if settings_path.exists():
             try:
@@ -847,12 +902,16 @@ class EncodingEngine:
         else:
             self.settings = EncodingSettings.get_default()
             self._save_settings()
-    
+
+
     def _save_settings(self) -> None:
         """Save encoding settings to file"""
-        # Use absolute path for settings file to avoid container issues
+        # Use settings directory for settings file
         app_dir = Path(__file__).parent.parent
-        settings_path = app_dir / "encoding_settings.json"
+        settings_path = app_dir / "settings" / "settings.json"
+        
+        # Ensure settings directory exists
+        settings_path.parent.mkdir(exist_ok=True)
         
         try:
             with open(settings_path, 'w') as f:
@@ -860,7 +919,8 @@ class EncodingEngine:
             logger.info("Saved encoding settings to file")
         except Exception as e:
             logger.error(f"Error saving encoding settings: {e}")
-    
+
+
     def update_settings(self, new_settings: EncodingSettings) -> None:
         """Update encoding settings"""
         old_max_concurrent = self.settings.max_concurrent_encodes
@@ -882,6 +942,60 @@ class EncodingEngine:
             
             # Shutdown old executor (will wait for current jobs to finish)
             threading.Thread(target=lambda: old_executor.shutdown(wait=True), daemon=True).start()
+
+
+    def add_notification_callback(self, callback) -> None:
+        """Add a callback for notifications"""
+        self._notification_callbacks.append(callback)
+
+
+    def _send_notification(self, notification_type: str, message: str, job: EncodingJob = None) -> None:
+        """Send a notification if enabled in settings"""
+        try:
+            # Check if this notification type is enabled
+            notifications = self.settings.notification_settings or {}
+            
+            if notification_type == 'completion' and not notifications.get('on_completion', True):
+                return
+            elif notification_type == 'failure' and not notifications.get('on_failure', True):
+                return
+            elif notification_type == 'queue_empty' and not notifications.get('on_queue_empty', True):
+                return
+            
+            # Send notification to all registered callbacks
+            notification_data = {
+                'type': notification_type,
+                'message': message,
+                'timestamp': time.time(),
+                'job': job.to_dict() if job else None
+            }
+            
+            for callback in self._notification_callbacks:
+                try:
+                    callback(notification_data)
+                except Exception as e:
+                    logger.error(f"Error in notification callback: {e}")
+                    
+            logger.info(f"Notification sent: {notification_type} - {message}")
+            
+        except Exception as e:
+            logger.error(f"Error sending notification: {e}")
+    
+    def _check_queue_empty_notification(self) -> None:
+        """Check if queue is empty and send notification if needed"""
+        try:
+            # Check if both queue and active jobs are empty
+            if (self.encoding_queue.empty() and 
+                len(self.active_jobs) == 0 and 
+                self.running):
+                
+                self._send_notification(
+                    'queue_empty',
+                    "All encoding jobs have been completed. Queue is empty.",
+                    None
+                )
+        except Exception as e:
+            logger.error(f"Error checking queue empty notification: {e}")
     
     def get_template_manager(self) -> TemplateManager:
         """Get the template manager instance"""

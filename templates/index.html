@@ -29,11 +29,21 @@
         <div class="sidebar">
             <ul class="file-list" id="fileList">
                 {% for movie in movies %}
-                <li class="file-item" data-filename="{{ movie.file_name }}">
+                <li class="file-item" data-filename="{{ movie.file_name }}" data-movie-index="{{ loop.index0 }}">
                     <!-- Content will be populated by JavaScript -->
                 </li>
                 {% endfor %}
             </ul>
+            
+            <!-- Stats for Nerds section -->
+            <div id="statsForNerds" class="stats-for-nerds hidden">
+                <div class="stats-header">
+                    <h4>📊 Stats for Nerds</h4>
+                </div>
+                <div id="statsContent" class="stats-content">
+                    <div class="stats-loading">Loading...</div>
+                </div>
+            </div>
         </div>
         
         <div class="resizer" id="resizer"></div>
@@ -108,29 +118,170 @@
     <!-- Minimal addition: notification area -->
     <div id="notifications" class="notifications"></div>
     
+    <script>
+        // Centralized file list item formatter
+        function formatFileListItem(movie, encodingStatus = null) {
+            // Determine CSS classes
+            const classes = ['file-item'];
+            
+            if (movie.has_metadata) {
+                classes.push('has-metadata');
+            } else {
+                classes.push('no-metadata');
+            }
+            
+            if (encodingStatus && encodingStatus !== 'not_queued') {
+                classes.push(encodingStatus);
+            }
+            
+            // Build info text
+            let infoText = '';
+            if (movie.size_mb) {
+                infoText = `${movie.size_mb} MB`;
+            }
+            
+            if (movie.has_metadata) {
+                infoText += infoText ? ' • Has metadata' : 'Has metadata';
+            }
+            
+            if (encodingStatus && encodingStatus !== 'not_queued') {
+                const statusMap = {
+                    'queued': 'Queued',
+                    'encoding': 'Encoding',
+                    'completed': 'Completed',
+                    'failed': 'Failed'
+                };
+                infoText += ` • ${statusMap[encodingStatus] || encodingStatus}`;
+            }
+            
+            return {
+                classes: classes.join(' '),
+                fileName: movie.file_name,
+                infoText: infoText,
+                statusIndicatorClass: movie.has_metadata ? 'has-metadata' : 'no-metadata'
+            };
+        }
+        
+        // Populate a single file list item
+        function populateFileListItem(listItem, movie, encodingStatus = null) {
+            const format = formatFileListItem(movie, encodingStatus);
+            
+            // Set classes
+            listItem.className = format.classes;
+            listItem.onclick = () => selectFile(format.fileName);
+            
+            // Set content
+            listItem.innerHTML = `
+                <div class="file-name">
+                    <span class="status-indicator ${format.statusIndicatorClass}"></span>
+                    ${format.fileName}
+                </div>
+                <div class="file-info">
+                    ${format.infoText}
+                </div>
+            `;
+            
+            // Add progress display for encoding files
+            if (encodingStatus === 'encoding') {
+                const progressDiv = createProgressDisplay(movie.file_name);
+                listItem.appendChild(progressDiv);
+            }
+        }
+        
+        // Create progress display for encoding files
+        function createProgressDisplay(fileName) {
+            const progressDiv = document.createElement('div');
+            progressDiv.className = 'encoding-progress';
+            progressDiv.id = `progress-${fileName}`;
+            
+            // Progress bar
+            const progressBarContainer = document.createElement('div');
+            progressBarContainer.className = 'progress-bar-container';
+            
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar encoding';
+            progressBar.style.width = '0%';
+            
+            progressBarContainer.appendChild(progressBar);
+            progressDiv.appendChild(progressBarContainer);
+            
+            // Progress metrics
+            const metricsDiv = document.createElement('div');
+            metricsDiv.className = 'progress-metrics';
+            
+            // Percentage and phase
+            const leftMetrics = document.createElement('div');
+            leftMetrics.style.display = 'flex';
+            leftMetrics.style.alignItems = 'center';
+            leftMetrics.style.gap = '0.5rem';
+            
+            const percentageSpan = document.createElement('span');
+            percentageSpan.className = 'progress-metric';
+            percentageSpan.innerHTML = '<span class="metric-value">0%</span>';
+            
+            const phaseSpan = document.createElement('span');
+            phaseSpan.className = 'encoding-phase scanning';
+            phaseSpan.textContent = 'Scanning';
+            
+            leftMetrics.appendChild(percentageSpan);
+            leftMetrics.appendChild(phaseSpan);
+            
+            // FPS and time metrics
+            const rightMetrics = document.createElement('div');
+            rightMetrics.style.display = 'flex';
+            rightMetrics.style.gap = '1rem';
+            
+            const fpsSpan = document.createElement('span');
+            fpsSpan.className = 'progress-metric';
+            fpsSpan.innerHTML = '<span class="metric-label">FPS:</span> <span class="metric-value">0</span>';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'progress-metric';
+            timeSpan.innerHTML = '<span class="metric-label">ETA:</span> <span class="metric-value">--:--</span>';
+            
+            rightMetrics.appendChild(fpsSpan);
+            rightMetrics.appendChild(timeSpan);
+            
+            metricsDiv.appendChild(leftMetrics);
+            metricsDiv.appendChild(rightMetrics);
+            progressDiv.appendChild(metricsDiv);
+            
+            return progressDiv;
+        }
+        
+        // Make functions globally available for other modules
+        window.formatFileListItem = formatFileListItem;
+        window.populateFileListItem = populateFileListItem;
+        window.createProgressDisplay = createProgressDisplay;
+    </script>
+    
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
-        // Override initializeApp to use centralized formatting
-        function initializeApp(movies) {
-            // Populate initial file list items
+        // Initialize the app with movie data (this will call the original initializeApp from app.js)
+        initializeApp({{ movies | tojson }});
+        
+        // After initialization, populate the file list with centralized formatting
+        setTimeout(function() {
+            const movies = {{ movies | tojson }};
+            console.log('Populating file list with centralized formatting for', movies.length, 'movies');
+            
             const fileListItems = document.querySelectorAll('#fileList .file-item');
+            console.log('Found', fileListItems.length, 'file list items');
+            
             fileListItems.forEach((item, index) => {
-                if (movies[index]) {
-                    populateFileListItem(item, movies[index]);
+                const movieIndex = parseInt(item.dataset.movieIndex);
+                const movie = movies[movieIndex];
+                if (movie) {
+                    console.log('Populating item', index, 'with movie:', movie.file_name);
+                    populateFileListItem(item, movie);
+                } else {
+                    console.warn('No movie data for item', index);
                 }
             });
             
             // Store movies data globally
             window.moviesData = movies;
-            
-            // Call original initialization if it exists
-            if (window.originalInitializeApp) {
-                window.originalInitializeApp(movies);
-            }
-        }
-        
-        // Initialize the app with movie data
-        initializeApp({{ movies | tojson }});
+        }, 50); // Small delay to let original initialization complete
     </script>
     
     <!-- WebSocket for real-time updates -->
@@ -330,141 +481,6 @@
         
         // Initialize with disconnection overlay shown
         showDisconnectionOverlay();
-        
-        // Centralized file list item formatter
-        function formatFileListItem(movie, encodingStatus = null) {
-            // Determine CSS classes
-            const classes = ['file-item'];
-            
-            if (movie.has_metadata) {
-                classes.push('has-metadata');
-            } else {
-                classes.push('no-metadata');
-            }
-            
-            if (encodingStatus && encodingStatus !== 'not_queued') {
-                classes.push(encodingStatus);
-            }
-            
-            // Build info text
-            let infoText = '';
-            if (movie.size_mb) {
-                infoText = `${movie.size_mb} MB`;
-            }
-            
-            if (movie.has_metadata) {
-                infoText += infoText ? ' • Has metadata' : 'Has metadata';
-            }
-            
-            if (encodingStatus && encodingStatus !== 'not_queued') {
-                const statusMap = {
-                    'queued': 'Queued',
-                    'encoding': 'Encoding',
-                    'completed': 'Completed',
-                    'failed': 'Failed'
-                };
-                infoText += ` • ${statusMap[encodingStatus] || encodingStatus}`;
-            }
-            
-            return {
-                classes: classes.join(' '),
-                fileName: movie.file_name,
-                infoText: infoText,
-                statusIndicatorClass: movie.has_metadata ? 'has-metadata' : 'no-metadata'
-            };
-        }
-        
-        // Populate a single file list item
-        function populateFileListItem(listItem, movie, encodingStatus = null) {
-            const format = formatFileListItem(movie, encodingStatus);
-            
-            // Set classes
-            listItem.className = format.classes;
-            listItem.onclick = () => selectFile(format.fileName);
-            
-            // Set content
-            listItem.innerHTML = `
-                <div class="file-name">
-                    <span class="status-indicator ${format.statusIndicatorClass}"></span>
-                    ${format.fileName}
-                </div>
-                <div class="file-info">
-                    ${format.infoText}
-                </div>
-            `;
-            
-            // Add progress display for encoding files
-            if (encodingStatus === 'encoding') {
-                const progressDiv = createProgressDisplay(movie.file_name);
-                listItem.appendChild(progressDiv);
-            }
-        }
-        
-        // Create progress display for encoding files (moved from encoding.js)
-        function createProgressDisplay(fileName) {
-            const progressDiv = document.createElement('div');
-            progressDiv.className = 'encoding-progress';
-            progressDiv.id = `progress-${fileName}`;
-            
-            // Progress bar
-            const progressBarContainer = document.createElement('div');
-            progressBarContainer.className = 'progress-bar-container';
-            
-            const progressBar = document.createElement('div');
-            progressBar.className = 'progress-bar encoding';
-            progressBar.style.width = '0%';
-            
-            progressBarContainer.appendChild(progressBar);
-            progressDiv.appendChild(progressBarContainer);
-            
-            // Progress metrics
-            const metricsDiv = document.createElement('div');
-            metricsDiv.className = 'progress-metrics';
-            
-            // Percentage and phase
-            const leftMetrics = document.createElement('div');
-            leftMetrics.style.display = 'flex';
-            leftMetrics.style.alignItems = 'center';
-            leftMetrics.style.gap = '0.5rem';
-            
-            const percentageSpan = document.createElement('span');
-            percentageSpan.className = 'progress-metric';
-            percentageSpan.innerHTML = '<span class="metric-value">0%</span>';
-            
-            const phaseSpan = document.createElement('span');
-            phaseSpan.className = 'encoding-phase scanning';
-            phaseSpan.textContent = 'Scanning';
-            
-            leftMetrics.appendChild(percentageSpan);
-            leftMetrics.appendChild(phaseSpan);
-            
-            // FPS and time metrics
-            const rightMetrics = document.createElement('div');
-            rightMetrics.style.display = 'flex';
-            rightMetrics.style.gap = '1rem';
-            
-            const fpsSpan = document.createElement('span');
-            fpsSpan.className = 'progress-metric';
-            fpsSpan.innerHTML = '<span class="metric-label">FPS:</span> <span class="metric-value">0</span>';
-            
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'progress-metric';
-            timeSpan.innerHTML = '<span class="metric-label">ETA:</span> <span class="metric-value">--:--</span>';
-            
-            rightMetrics.appendChild(fpsSpan);
-            rightMetrics.appendChild(timeSpan);
-            
-            metricsDiv.appendChild(leftMetrics);
-            metricsDiv.appendChild(rightMetrics);
-            progressDiv.appendChild(metricsDiv);
-            
-            return progressDiv;
-        }
-        
-        // Make functions globally available for other modules
-        window.formatFileListItem = formatFileListItem;
-        window.populateFileListItem = populateFileListItem;
-        window.createProgressDisplay = createProgressDisplay;
     </script>
     
     <!-- Encoding UI JavaScript -->

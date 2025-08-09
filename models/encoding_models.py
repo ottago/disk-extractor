@@ -267,6 +267,7 @@ class EncodingSettings:
     auto_queue_new_files: bool = False
     progress_update_interval: int = 1  # seconds
     notification_settings: Dict[str, bool] = None
+    stats_for_nerds: bool = False  # Show detailed system stats
     
     def __post_init__(self):
         """Initialize default values"""

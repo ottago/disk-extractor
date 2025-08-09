@@ -367,7 +367,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
     return bp
 
 
-def create_settings_routes(encoding_engine: EncodingEngine) -> Blueprint:
+def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Blueprint:
     """
     Create encoding settings API routes
     
@@ -449,6 +449,12 @@ def create_settings_routes(encoding_engine: EncodingEngine) -> Blueprint:
                 
                 # Update encoding engine
                 encoding_engine.update_settings(new_settings)
+                
+                # Notify clients via WebSocket if available
+                if socketio:
+                    socketio.emit('settings_updated', {
+                        'settings': new_settings.to_dict()
+                    })
                 
                 return jsonify({
                     'success': True,

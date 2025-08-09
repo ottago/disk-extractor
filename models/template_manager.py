@@ -98,9 +98,9 @@ class TemplateManager:
         """Initialize template manager"""
         self.templates: Dict[str, HandBrakeTemplate] = {}
         
-        # Use absolute path for templates directory to avoid container issues
+        # Use settings directory for templates
         app_dir = Path(__file__).parent.parent
-        self.templates_dir = app_dir / 'templates'
+        self.templates_dir = app_dir / 'settings'
         self.templates_dir.mkdir(exist_ok=True)
         
         # Load existing templates
@@ -124,7 +124,7 @@ class TemplateManager:
         except Exception as e:
             logger.error(f"Error loading templates: {e}")
     
-    def save_template(self, name: str, template_data: Dict[str, Any]) -> bool:
+    def save_template(self, name: str, template_data: Dict[str, Any]) -> tuple[bool, str]:
         """
         Save a new template
         
@@ -133,12 +133,13 @@ class TemplateManager:
             template_data: HandBrake JSON preset data
             
         Returns:
-            True if saved successfully
+            Tuple of (success: bool, error_message: str)
         """
         try:
             # Validate template data
-            if not self._validate_template(template_data):
-                return False
+            is_valid, validation_error = self._validate_template(template_data)
+            if not is_valid:
+                return False, validation_error
             
             # Create template object
             template = HandBrakeTemplate(template_data)
@@ -152,11 +153,20 @@ class TemplateManager:
             self.templates[name] = template
             
             logger.info(f"Saved template: {name}")
-            return True
+            return True, ""
             
+        except PermissionError as e:
+            error_msg = f"Permission denied: Cannot write to settings directory. Check file permissions."
+            logger.error(f"Permission error saving template {name}: {e}")
+            return False, error_msg
+        except OSError as e:
+            error_msg = f"File system error: {str(e)}"
+            logger.error(f"OS error saving template {name}: {e}")
+            return False, error_msg
         except Exception as e:
+            error_msg = f"Unexpected error: {str(e)}"
             logger.error(f"Error saving template {name}: {e}")
-            return False
+            return False, error_msg
     
     def delete_template(self, name: str) -> bool:
         """
@@ -387,7 +397,7 @@ class TemplateManager:
         if template.supports_chapters():
             cmd.append('--markers')
     
-    def _validate_template(self, template_data: Dict[str, Any]) -> bool:
+    def _validate_template(self, template_data: Dict[str, Any]) -> tuple[bool, str]:
         """
         Validate HandBrake template data
         
@@ -395,34 +405,38 @@ class TemplateManager:
             template_data: Template data to validate
             
         Returns:
-            True if valid
+            Tuple of (is_valid: bool, error_message: str)
         """
         try:
             # Check required fields
             required_fields = ['PresetName']
             for field in required_fields:
                 if field not in template_data:
-                    logger.error(f"Template missing required field: {field}")
-                    return False
+                    error_msg = f"Template missing required field: {field}"
+                    logger.error(error_msg)
+                    return False, error_msg
             
             # Validate preset name
             name = template_data['PresetName']
             if not isinstance(name, str) or len(name.strip()) == 0:
-                logger.error("Invalid preset name")
-                return False
+                error_msg = "Invalid preset name: must be a non-empty string"
+                logger.error(error_msg)
+                return False, error_msg
             
             # Check for dangerous settings (basic validation)
             if 'VideoEncoder' in template_data:
                 encoder = template_data['VideoEncoder']
                 if not isinstance(encoder, str):
-                    logger.error("Invalid video encoder")
-                    return False
+                    error_msg = "Invalid video encoder: must be a string"
+                    logger.error(error_msg)
+                    return False, error_msg
             
-            return True
+            return True, ""
             
         except Exception as e:
-            logger.error(f"Template validation error: {e}")
-            return False
+            error_msg = f"Template validation error: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
     
     def extract_metadata_tracks(self, enhanced_metadata: Dict[str, Any], 
                               title_number: int) -> Tuple[List[AudioTrackSelection], 
