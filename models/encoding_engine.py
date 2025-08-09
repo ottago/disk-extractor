@@ -319,7 +319,7 @@ class EncodingEngine:
         with self._jobs_cache_lock:
             if (self._jobs_cache is not None and 
                 current_time - self._jobs_cache_timestamp < Config.ENCODING_JOBS_CACHE_TTL):
-                logger.debug(f"Returning {len(self._jobs_cache)} cached jobs")
+                # NKW logger.debug(f"Returning {len(self._jobs_cache)} cached jobs")
                 return self._jobs_cache.copy()
         
         # Cache miss or expired, rebuild the jobs list

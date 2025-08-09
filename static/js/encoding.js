@@ -9,13 +9,19 @@
     
     // Initialize encoding UI
     function initializeEncodingUI() {
+        console.log('Initializing Encoding UI...');
+        
         // Request initial encoding status
         if (window.socket) {
+            console.log('Requesting initial encoding status...');
             window.socket.emit('request_encoding_status');
+        } else {
+            console.warn('Socket not available for encoding status request');
         }
         
         // Set up periodic status updates
         setInterval(requestEncodingStatus, 5000);
+        console.log('Encoding UI initialized');
     }
     
     // Request encoding status from server
@@ -27,6 +33,7 @@
     
     // Handle encoding status updates
     function handleEncodingStatusUpdate(data) {
+        console.log('Handling encoding status update:', data);
         encodingStatus = data;
         updateFileListWithEncodingStatus();
         updateQueueManagementButtons();
@@ -34,6 +41,7 @@
     
     // Handle encoding progress updates
     function handleEncodingProgress(data) {
+        console.log('Handling encoding progress update:', data);
         const { job_id, progress } = data;
         
         // Update progress display for the specific job
@@ -142,60 +150,66 @@
         const li = document.createElement('li');
         const encodingStatus = getFileEncodingStatus(movie.file_name);
         
-        // Set classes based on metadata and encoding status
-        let classes = ['file-item'];
-        if (movie.has_metadata) {
-            classes.push('has-metadata');
-        } else {
-            classes.push('no-metadata');
-        }
-        
-        if (encodingStatus && encodingStatus !== 'not_queued') {
-            classes.push(encodingStatus);
-        }
-        
-        li.className = classes.join(' ');
         li.dataset.filename = movie.file_name;
-        li.onclick = () => selectFile(movie.file_name);
         
-        // Create file info content
-        const fileNameDiv = document.createElement('div');
-        fileNameDiv.className = 'file-name';
-        
-        const statusIndicator = document.createElement('span');
-        statusIndicator.className = `status-indicator ${encodingStatus || (movie.has_metadata ? 'has-metadata' : 'no-metadata')}`;
-        
-        fileNameDiv.appendChild(statusIndicator);
-        fileNameDiv.appendChild(document.createTextNode(movie.file_name));
-        
-        const fileInfoDiv = document.createElement('div');
-        fileInfoDiv.className = 'file-info';
-        
-        let infoText = '';
-        if (movie.size_mb) {
-            infoText += `${movie.size_mb} MB`;
-        }
-        
-        if (movie.has_metadata) {
-            infoText += infoText ? ' • Has metadata' : 'Has metadata';
+        // Use centralized formatting if available, otherwise fallback
+        if (window.populateFileListItem) {
+            window.populateFileListItem(li, movie, encodingStatus);
         } else {
-            infoText += infoText ? ' • No metadata' : 'No metadata';
-        }
-        
-        // Add encoding status info
-        if (encodingStatus && encodingStatus !== 'not_queued') {
-            infoText += ` • ${formatEncodingStatus(encodingStatus)}`;
-        }
-        
-        fileInfoDiv.textContent = infoText;
-        
-        li.appendChild(fileNameDiv);
-        li.appendChild(fileInfoDiv);
-        
-        // Add progress display for encoding files
-        if (encodingStatus === 'encoding') {
-            const progressDiv = createProgressDisplay(movie.file_name);
-            li.appendChild(progressDiv);
+            // Fallback formatting (should not be needed if main page loads first)
+            let classes = ['file-item'];
+            if (movie.has_metadata) {
+                classes.push('has-metadata');
+            } else {
+                classes.push('no-metadata');
+            }
+            
+            if (encodingStatus && encodingStatus !== 'not_queued') {
+                classes.push(encodingStatus);
+            }
+            
+            li.className = classes.join(' ');
+            li.onclick = () => selectFile(movie.file_name);
+            
+            // Create file info content
+            const fileNameDiv = document.createElement('div');
+            fileNameDiv.className = 'file-name';
+            
+            const statusIndicator = document.createElement('span');
+            statusIndicator.className = `status-indicator ${movie.has_metadata ? 'has-metadata' : 'no-metadata'}`;
+            
+            fileNameDiv.appendChild(statusIndicator);
+            fileNameDiv.appendChild(document.createTextNode(movie.file_name));
+            
+            const fileInfoDiv = document.createElement('div');
+            fileInfoDiv.className = 'file-info';
+            
+            let infoText = '';
+            if (movie.size_mb) {
+                infoText += `${movie.size_mb} MB`;
+            }
+            
+            if (movie.has_metadata) {
+                infoText += infoText ? ' • Has metadata' : 'Has metadata';
+            }
+            
+            // Add encoding status info
+            if (encodingStatus && encodingStatus !== 'not_queued') {
+                infoText += ` • ${formatEncodingStatus(encodingStatus)}`;
+            }
+            
+            fileInfoDiv.textContent = infoText;
+            
+            li.appendChild(fileNameDiv);
+            li.appendChild(fileInfoDiv);
+            
+            // Add progress display for encoding files
+            if (encodingStatus === 'encoding') {
+                const progressDiv = window.createProgressDisplay ? 
+                    window.createProgressDisplay(movie.file_name) : 
+                    createProgressDisplay(movie.file_name);
+                li.appendChild(progressDiv);
+            }
         }
         
         return li;
