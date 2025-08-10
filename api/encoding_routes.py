@@ -364,6 +364,116 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Internal server error: {str(e)}'
             }), 500
     
+    @bp.route('/failure-logs/<path:file_name>/<int:title_number>', methods=['GET'])
+    def get_failure_logs(file_name: str, title_number: int) -> Union[Response, tuple]:
+        """Get failure logs for a specific failed encoding job"""
+        try:
+            # Validate filename
+            file_name = validate_filename(file_name)
+            
+            # Find the failed job
+            all_jobs = encoding_engine.get_all_jobs()
+            failed_job = None
+            
+            for job in all_jobs:
+                if (job.file_name == file_name and 
+                    job.title_number == title_number and 
+                    job.status == EncodingStatus.FAILED):
+                    failed_job = job
+                    break
+            
+            if not failed_job:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed job not found'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'job': {
+                    'file_name': failed_job.file_name,
+                    'title_number': failed_job.title_number,
+                    'movie_name': failed_job.movie_name,
+                    'error_message': failed_job.error_message,
+                    'failure_logs': failed_job.failure_logs or [],
+                    'failed_at': failed_job.completed_at,
+                    'preset_name': failed_job.preset_name
+                }
+            })
+            
+        except ValidationError as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid filename: {str(e)}'
+            }), 400
+        except Exception as e:
+            logger.error(f"Error getting failure logs: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/clear-failure/<path:file_name>/<int:title_number>', methods=['POST'])
+    def clear_failure(file_name: str, title_number: int) -> Union[Response, tuple]:
+        """Clear a failed job so it can be retried"""
+        try:
+            # Validate filename
+            file_name = validate_filename(file_name)
+            
+            if not metadata_manager:
+                return jsonify({
+                    'success': False,
+                    'error': 'Metadata manager not available'
+                }), 500
+            
+            # Load metadata
+            metadata = metadata_manager.load_metadata(file_name)
+            jobs = ExtendedMetadata.get_encoding_jobs(metadata)
+            
+            # Find and remove the failed job
+            job_removed = False
+            updated_jobs = []
+            
+            for job in jobs:
+                if (job.file_name == file_name and 
+                    job.title_number == title_number and 
+                    job.status == EncodingStatus.FAILED):
+                    # Skip this job (remove it)
+                    job_removed = True
+                    logger.info(f"Cleared failed job: {file_name} title {title_number}")
+                else:
+                    updated_jobs.append(job)
+            
+            if not job_removed:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed job not found'
+                }), 404
+            
+            # Update metadata with the cleaned job list
+            metadata = ExtendedMetadata.set_encoding_jobs(metadata, updated_jobs)
+            metadata_manager.save_metadata(file_name, metadata)
+            
+            # Invalidate encoding engine cache
+            encoding_engine._invalidate_jobs_cache()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Failed job cleared for {file_name} title {title_number}'
+            })
+            
+        except ValidationError as e:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid filename: {str(e)}'
+            }), 400
+        except Exception as e:
+            logger.error(f"Error clearing failure: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
     return bp
 
 

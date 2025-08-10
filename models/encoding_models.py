@@ -72,6 +72,7 @@ class EncodingJob:
     completed_at: str = ""
     progress: Optional[EncodingProgress] = None
     error_message: str = ""
+    failure_logs: List[str] = None  # Last 100 lines of output when job fails
     output_path: str = ""
     
     def __post_init__(self):
@@ -80,6 +81,8 @@ class EncodingJob:
             self.created_at = datetime.now().isoformat()
         if self.progress is None:
             self.progress = EncodingProgress()
+        if self.failure_logs is None:
+            self.failure_logs = []
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""

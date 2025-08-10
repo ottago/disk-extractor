@@ -549,16 +549,16 @@ class EncodingEngine:
             # Handle completion
             if process.returncode == 0:
                 logger.info(f"HandBrake completed successfully for {job_id}")
-                self._handle_job_completion(job_id, job, True)
+                self._handle_job_completion(job_id, job, True, "", all_output)
             else:
-                error_msg = f"HandBrake failed with exit code {process.returncode}: {stderr}"
+                error_msg = f"HandBrake failed with exit code {process.returncode}"
                 logger.error(f"HandBrake failed for {job_id}: {error_msg}")
-                self._handle_job_completion(job_id, job, False, error_msg)
+                self._handle_job_completion(job_id, job, False, error_msg, all_output)
                 
         except Exception as e:
             error_msg = f"Encoding job failed: {str(e)}"
             logger.error(f"Error in encoding job {job_id}: {e}")
-            self._handle_job_completion(job_id, job, False, error_msg)
+            self._handle_job_completion(job_id, job, False, error_msg, [])
     
     def _build_handbrake_command(self, job: EncodingJob) -> List[str]:
         """Build HandBrake CLI command using template manager"""
@@ -730,7 +730,7 @@ class EncodingEngine:
         
         return None
     
-    def _handle_job_completion(self, job_id: str, job: EncodingJob, success: bool, error_msg: str = "") -> None:
+    def _handle_job_completion(self, job_id: str, job: EncodingJob, success: bool, error_msg: str = "", output_lines: List[str] = None) -> None:
         """Handle job completion"""
         with self._lock:
             # Update job status
@@ -749,6 +749,26 @@ class EncodingEngine:
             else:
                 job.status = EncodingStatus.FAILED
                 job.error_message = error_msg
+                
+                # Capture last 100 lines of output for failure analysis
+                if output_lines:
+                    # Get last 100 lines, clean them up
+                    last_lines = output_lines[-100:] if len(output_lines) > 100 else output_lines
+                    # Clean up the lines - remove empty lines and debug prefixes
+                    cleaned_lines = []
+                    for line in last_lines:
+                        line = line.strip()
+                        if line and not line.startswith(f"{job_id} OUTPUT:"):
+                            # Remove any remaining newlines and clean up
+                            cleaned_line = line.replace('\n', '').replace('\r', '')
+                            if cleaned_line:
+                                cleaned_lines.append(cleaned_line)
+                    
+                    job.failure_logs = cleaned_lines[-100:]  # Ensure we don't exceed 100 lines
+                    logger.info(f"Captured {len(job.failure_logs)} lines of failure logs for {job_id}")
+                else:
+                    job.failure_logs = []
+                
                 logger.error(f"Encoding job failed: {job_id} - {error_msg}")
                 
                 # Send failure notification

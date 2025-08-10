@@ -322,6 +322,11 @@ function displayEnhancedMetadata() {
     });
     
     console.log('All title elements created and appended');
+    
+    // Check encoding status for all titles after they're created
+    setTimeout(() => {
+        checkEncodingStatusForAllTitles();
+    }, 100);
 }
 
 // Create title element
@@ -520,6 +525,11 @@ function createTitleElement(title) {
                         }).join('')}
                     </div>
                 </div>
+            </div>
+            
+            <!-- Encoding Status Section -->
+            <div class="encoding-status-section" id="encoding-status-${title.title_number}">
+                <!-- This will be populated by checkEncodingStatus() -->
             </div>
         </div>
     `;
@@ -1230,7 +1240,267 @@ if (typeof socket !== 'undefined') {
             toggleStatsForNerds(data.settings.stats_for_nerds);
         }
     });
-    
-    // Note: Encoding progress and status events are handled by encoding.js
-    // to avoid conflicts and ensure proper handling
 }
+
+// Check encoding status for all titles and update UI
+async function checkEncodingStatusForAllTitles() {
+    if (!selectedFile) return;
+    
+    try {
+        const response = await fetch('/api/encoding/status');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Check each title for encoding status
+            const titleSections = document.querySelectorAll('.title-section');
+            titleSections.forEach(titleSection => {
+                const titleNumber = parseInt(titleSection.dataset.titleNumber);
+                updateTitleEncodingStatus(titleNumber, data.jobs);
+            });
+        }
+    } catch (error) {
+        console.error('Error checking encoding status:', error);
+    }
+}
+
+// Update encoding status for a specific title
+function updateTitleEncodingStatus(titleNumber, allJobs) {
+    if (!selectedFile) return;
+    
+    const statusSection = document.getElementById(`encoding-status-${titleNumber}`);
+    if (!statusSection) return;
+    
+    // Find jobs for this file and title
+    const relevantJobs = [];
+    
+    // Check all job categories
+    ['encoding', 'queued', 'completed', 'failed'].forEach(category => {
+        if (allJobs[category]) {
+            allJobs[category].forEach(job => {
+                if (job.file_name === selectedFile && job.title_number === titleNumber) {
+                    relevantJobs.push({...job, category});
+                }
+            });
+        }
+    });
+    
+    if (relevantJobs.length === 0) {
+        statusSection.innerHTML = '';
+        return;
+    }
+    
+    // Show the most recent/relevant job
+    const job = relevantJobs[0];
+    let statusHTML = '';
+    
+    switch (job.category) {
+        case 'encoding':
+            statusHTML = `
+                <div class="encoding-status encoding">
+                    <span class="status-icon">🔄</span>
+                    <span class="status-text">Encoding in progress...</span>
+                    <div class="progress-info">
+                        ${job.progress ? `${job.progress.percentage.toFixed(1)}% at ${job.progress.fps.toFixed(1)} fps` : ''}
+                    </div>
+                </div>
+            `;
+            break;
+            
+        case 'queued':
+            statusHTML = `
+                <div class="encoding-status queued">
+                    <span class="status-icon">⏳</span>
+                    <span class="status-text">Queued for encoding</span>
+                </div>
+            `;
+            break;
+            
+        case 'completed':
+            statusHTML = `
+                <div class="encoding-status completed">
+                    <span class="status-icon">✅</span>
+                    <span class="status-text">Encoding completed</span>
+                    <span class="completion-time">${formatRelativeTime(job.completed_at)}</span>
+                </div>
+            `;
+            break;
+            
+        case 'failed':
+            statusHTML = `
+                <div class="encoding-status failed">
+                    <span class="status-icon">❌</span>
+                    <span class="status-text">Encoding failed</span>
+                    <span class="failure-time">${formatRelativeTime(job.completed_at)}</span>
+                    <div class="failure-actions">
+                        <button class="failure-btn view-logs-btn" onclick="viewFailureLogs('${escapeHtml(selectedFile)}', ${titleNumber})">
+                            📄 View Logs
+                        </button>
+                        <button class="failure-btn clear-failure-btn" onclick="clearFailure('${escapeHtml(selectedFile)}', ${titleNumber})">
+                            🔄 Clear & Retry
+                        </button>
+                    </div>
+                    ${job.error_message ? `<div class="error-message">${escapeHtml(job.error_message)}</div>` : ''}
+                </div>
+            `;
+            break;
+    }
+    
+    statusSection.innerHTML = statusHTML;
+}
+
+// View failure logs for a specific title
+async function viewFailureLogs(fileName, titleNumber) {
+    try {
+        const response = await fetch(`/api/encoding/failure-logs/${encodeURIComponent(fileName)}/${titleNumber}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            showFailureLogsModal(data.job);
+        } else {
+            showAlert('Error loading failure logs: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error loading failure logs:', error);
+        showAlert('Error loading failure logs: ' + error.message, 'error');
+    }
+}
+
+// Clear a failed job so it can be retried
+async function clearFailure(fileName, titleNumber) {
+    if (!confirm('Clear this failed job? This will allow you to retry encoding this title.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/encoding/clear-failure/${encodeURIComponent(fileName)}/${titleNumber}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('Failed job cleared. You can now retry encoding this title.', 'success');
+            // Refresh the encoding status
+            checkEncodingStatusForAllTitles();
+        } else {
+            showAlert('Error clearing failure: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error clearing failure:', error);
+        showAlert('Error clearing failure: ' + error.message, 'error');
+    }
+}
+
+// Show failure logs in a modal
+function showFailureLogsModal(job) {
+    // Store logs globally for the copy function
+    window.currentFailureLogs = job.failure_logs;
+    
+    // Create modal HTML
+    const modalHTML = `
+        <div class="modal-overlay" id="failureLogsModal" onclick="closeFailureLogsModal()">
+            <div class="modal-content failure-logs-modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2>Encoding Failure Logs</h2>
+                    <button class="modal-close" onclick="closeFailureLogsModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="failure-info">
+                        <div class="failure-details">
+                            <strong>File:</strong> ${escapeHtml(job.file_name)}<br>
+                            <strong>Title:</strong> ${job.title_number} - ${escapeHtml(job.movie_name)}<br>
+                            <strong>Preset:</strong> ${escapeHtml(job.preset_name)}<br>
+                            <strong>Failed:</strong> ${formatRelativeTime(job.failed_at)}<br>
+                            ${job.error_message ? `<strong>Error:</strong> ${escapeHtml(job.error_message)}<br>` : ''}
+                        </div>
+                    </div>
+                    <div class="logs-container">
+                        <h3>Last ${job.failure_logs.length} lines of output:</h3>
+                        <div class="logs-content">
+                            ${job.failure_logs.length > 0 ? 
+                                job.failure_logs.map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('') :
+                                '<div class="no-logs">No logs available</div>'
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeFailureLogsModal()">Close</button>
+                    <button class="btn btn-primary" onclick="copyLogsToClipboard()">Copy Logs</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Focus on modal for accessibility
+    document.getElementById('failureLogsModal').focus();
+}
+
+// Close failure logs modal
+function closeFailureLogsModal() {
+    const modal = document.getElementById('failureLogsModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Clean up global variable
+    if (window.currentFailureLogs) {
+        delete window.currentFailureLogs;
+    }
+}
+
+// Copy logs to clipboard
+async function copyLogsToClipboard() {
+    try {
+        if (!window.currentFailureLogs || !Array.isArray(window.currentFailureLogs)) {
+            showAlert('No logs available to copy', 'error');
+            return;
+        }
+        
+        const logsText = window.currentFailureLogs.join('\n');
+        await navigator.clipboard.writeText(logsText);
+        showAlert('Logs copied to clipboard', 'success');
+    } catch (error) {
+        console.error('Error copying logs:', error);
+        showAlert('Error copying logs to clipboard', 'error');
+    }
+}
+
+// Format relative time (e.g., "2 hours ago")
+function formatRelativeTime(isoString) {
+    if (!isoString) return '';
+    
+    try {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMinutes = Math.floor(diffMs / 60000);
+        
+        if (diffMinutes < 1) return 'just now';
+        if (diffMinutes < 60) return `${diffMinutes} min ago`;
+        
+        const diffHours = Math.floor(diffMinutes / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } catch (error) {
+        return '';
+    }
+}
+
+// Show alert message
+function showAlert(message, type = 'info') {
+    // Use existing notification system if available
+    if (window.showNotification) {
+        window.showNotification(message, type);
+    } else {
+        // Fallback to alert
+        alert(message);
+    }
+}
+
+// Note: Encoding progress and status events are handled by encoding.js
+// to avoid conflicts and ensure proper handling
