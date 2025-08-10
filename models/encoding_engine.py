@@ -460,86 +460,101 @@ class EncodingEngine:
                 
                 # Wait for data to be available on stdout (which includes stderr)
                 # Use a short timeout to check process status periodically
-                if sys.platform != 'win32':  # select() works differently on Windows
-                    ready, _, _ = select.select([process.stdout], [], [], 0.1)
-                    
-                    if ready:
-                        # Data is available, read it
-                        chunk = process.stdout.read(4096)  # Larger chunks since we're not polling
-                        if chunk:
-                            output_buffer += chunk
-                            
-                            # Process complete lines and carriage return updates
-                            while b'\n' in output_buffer or b'\r' in output_buffer:
-                                if b'\n' in output_buffer:
-                                    line, output_buffer = output_buffer.split(b'\n', 1)
-                                    line_str = line.decode('utf-8', errors='ignore').strip()
-                                elif b'\r' in output_buffer:
-                                    line, output_buffer = output_buffer.split(b'\r', 1)
-                                    line_str = line.decode('utf-8', errors='ignore').strip()
-                                else:
-                                    break
-                                    
-                                if line_str:  # Only process non-empty lines
-                                    logger.debug(f"{job_id} OUTPUT: {repr(line_str)}")
-                                    all_output.append(line_str + '\n')
-                                    
-                                    # Try to parse as progress (HandBrake progress comes via stderr)
-                                    progress = self._parse_handbrake_progress(line_str)
-                                    if progress:
-                                        job.progress = progress
-                                        self._notify_progress(job_id, progress)
-                                        
-                                        # Save progress periodically
-                                        if (progress.percentage > 0 and 
-                                            progress.percentage % 5 == 0 and 
-                                            progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
-                                            job.progress.last_saved_percentage = progress.percentage
-                                            self._persist_job_status(job_id, job)
-                else:
-                    # Fallback for Windows - use small sleep
+                ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                
+                if ready:
+                    # Data is available, read it
                     chunk = process.stdout.read(4096)
                     if chunk:
                         output_buffer += chunk
                         
-                        # Process lines (same logic as above)
-                        while b'\n' in output_buffer or b'\r' in output_buffer:
-                            if b'\n' in output_buffer:
-                                line, output_buffer = output_buffer.split(b'\n', 1)
-                                line_str = line.decode('utf-8', errors='ignore').strip()
-                            elif b'\r' in output_buffer:
-                                line, output_buffer = output_buffer.split(b'\r', 1)
-                                line_str = line.decode('utf-8', errors='ignore').strip()
-                            else:
+                        # Process all complete lines in the buffer
+                        while True:
+                            # Look for line terminators (prioritize \n over \r for proper line handling)
+                            newline_pos = output_buffer.find(b'\n')
+                            carriage_pos = output_buffer.find(b'\r')
+                            
+                            # Determine which terminator comes first
+                            if newline_pos == -1 and carriage_pos == -1:
+                                # No terminators found, break and wait for more data
                                 break
-                                
-                            if line_str:
+                            elif newline_pos == -1:
+                                # Only carriage return found
+                                terminator_pos = carriage_pos
+                                terminator = b'\r'
+                            elif carriage_pos == -1:
+                                # Only newline found
+                                terminator_pos = newline_pos
+                                terminator = b'\n'
+                            else:
+                                # Both found, use the one that comes first
+                                if newline_pos < carriage_pos:
+                                    terminator_pos = newline_pos
+                                    terminator = b'\n'
+                                else:
+                                    terminator_pos = carriage_pos
+                                    terminator = b'\r'
+                            
+                            # Extract the line (everything before the terminator)
+                            line_bytes = output_buffer[:terminator_pos]
+                            
+                            # Remove the processed line and terminator from buffer
+                            output_buffer = output_buffer[terminator_pos + 1:]
+                            
+                            # Handle \r\n sequences (Windows line endings)
+                            if terminator == b'\r' and output_buffer.startswith(b'\n'):
+                                output_buffer = output_buffer[1:]  # Remove the \n as well
+                            
+                            # Convert to string and process
+                            try:
+                                line_str = line_bytes.decode('utf-8', errors='ignore').strip()
+                            except UnicodeDecodeError:
+                                line_str = line_bytes.decode('latin-1', errors='ignore').strip()
+                            
+                            if line_str:  # Only process non-empty lines
                                 logger.debug(f"{job_id} OUTPUT: {repr(line_str)}")
-                                all_output.append(line_str + '\n')
+                                all_output.append(line_str)
                                 
+                                # Try to parse as progress (HandBrake progress comes via stderr)
                                 progress = self._parse_handbrake_progress(line_str)
                                 if progress:
                                     job.progress = progress
                                     self._notify_progress(job_id, progress)
                                     
+                                    # Save progress periodically
                                     if (progress.percentage > 0 and 
                                         progress.percentage % 5 == 0 and 
                                         progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
                                         job.progress.last_saved_percentage = progress.percentage
                                         self._persist_job_status(job_id, job)
-                    else:
-                        time.sleep(0.01)  # Only sleep on Windows when no data
             
-            # Get any remaining output
-            remaining_output = process.communicate()[0]  # Only stdout since stderr is redirected
-            if remaining_output:
-                remaining_str = remaining_output.decode('utf-8', errors='ignore')
-                all_output.append(remaining_str)
+            # Process any remaining data in the buffer
+            if output_buffer:
+                try:
+                    remaining_str = output_buffer.decode('utf-8', errors='ignore').strip()
+                except UnicodeDecodeError:
+                    remaining_str = output_buffer.decode('latin-1', errors='ignore').strip()
+                
+                if remaining_str:
+                    logger.debug(f"{job_id} FINAL OUTPUT: {repr(remaining_str)}")
+                    all_output.append(remaining_str)
             
-            # Combine all output (both stdout and stderr are now in one stream)
-            combined_output = ''.join(all_output)
-            stdout = combined_output  # For compatibility
-            stderr = ""  # Empty since everything is in stdout now
+            # Get any final output from process termination
+            try:
+                final_output, _ = process.communicate(timeout=5)
+                if final_output:
+                    final_str = final_output.decode('utf-8', errors='ignore').strip()
+                    if final_str:
+                        # Split final output into lines and add them
+                        final_lines = final_str.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+                        for line in final_lines:
+                            line = line.strip()
+                            if line:
+                                all_output.append(line)
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Timeout waiting for final output from {job_id}")
+                process.kill()
+                process.communicate()
             
             # Clean up process reference
             with self._lock:
@@ -758,7 +773,7 @@ class EncodingEngine:
                     cleaned_lines = []
                     for line in last_lines:
                         line = line.strip()
-                        if line and not line.startswith(f"{job_id} OUTPUT:"):
+                        if line and not line.startswith(f"{job_id}:"):
                             # Remove any remaining newlines and clean up
                             cleaned_line = line.replace('\n', '').replace('\r', '')
                             if cleaned_line:
