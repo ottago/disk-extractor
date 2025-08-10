@@ -8,13 +8,20 @@ services:
       # EDIT THIS: Change the path before the colon to your movie directory
       #- /path/to/your/movies:/movies
       - /mnt/md0/offline/media/ToBeEncoded:/movies
+      
+      # Persistent settings directory
+      - ./settings:/app/settings
+      
       # Optional: Mount additional directories
       # - /path/to/output:/output
+
     environment:
       - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
     # Automatically start with the mounted directory
     command: ["python3", "app.py", "/movies"]
     restart: unless-stopped
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
