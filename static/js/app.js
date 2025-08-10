@@ -872,20 +872,39 @@ async function checkStatsSettings() {
 function toggleStatsForNerds(enabled) {
     statsEnabled = enabled;
     const statsSection = document.getElementById('statsForNerds');
-    const fileList = document.querySelector('.file-list');
     
     if (enabled) {
         statsSection.classList.remove('hidden');
-        if (fileList) {
-            fileList.style.paddingBottom = '210px'; // Space for stats section
-        }
         startStatsUpdates();
     } else {
         statsSection.classList.add('hidden');
-        if (fileList) {
-            fileList.style.paddingBottom = '20px'; // Normal padding
-        }
         stopStatsUpdates();
+        
+        // Save the setting when toggled off
+        saveStatsForNerdsSetting(false);
+    }
+}
+
+// Function to save the stats for nerds setting
+async function saveStatsForNerdsSetting(enabled) {
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                stats_for_nerds: enabled
+            })
+        });
+        
+        if (response.ok) {
+            console.log(`📊 Stats for Nerds setting saved: ${enabled}`);
+        } else {
+            console.error('Failed to save Stats for Nerds setting');
+        }
+    } catch (error) {
+        console.error('Error saving Stats for Nerds setting:', error);
     }
 }
 
