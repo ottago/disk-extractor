@@ -27,18 +27,21 @@
     
     <div class="container">
         <div class="sidebar">
-            <ul class="file-list" id="fileList">
-                {% for movie in movies %}
-                <li class="file-item" data-filename="{{ movie.file_name }}" data-movie-index="{{ loop.index0 }}">
-                    <!-- Content will be populated by JavaScript -->
-                </li>
-                {% endfor %}
-            </ul>
+            <div class="sidebar-content">
+                <ul class="file-list" id="fileList">
+                    {% for movie in movies %}
+                    <li class="file-item" data-filename="{{ movie.file_name }}" data-movie-index="{{ loop.index0 }}">
+                        <!-- Content will be populated by JavaScript -->
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
             
-            <!-- Stats for Nerds section -->
+            <!-- Stats for Nerds section - Fixed at bottom -->
             <div id="statsForNerds" class="stats-for-nerds hidden">
                 <div class="stats-header">
                     <h4>📊 Stats for Nerds</h4>
+                    <button class="stats-close-btn" onclick="toggleStatsForNerds(false)" title="Close Stats">×</button>
                 </div>
                 <div id="statsContent" class="stats-content">
                     <div class="stats-loading">Loading...</div>
@@ -299,14 +302,16 @@
             hideDisconnectionOverlay();
             showNotification('Live file monitoring active', 'success');
             
-            // Request initial encoding status
-            socket.emit('request_encoding_status');
-            
             // Initialize encoding UI after connection
             if (window.EncodingUI && typeof window.EncodingUI.initialize === 'function') {
                 window.EncodingUI.initialize();
                 console.log('Encoding UI initialized');
+            } else {
+                console.log('EncodingUI not available yet, will initialize when loaded');
             }
+            
+            // Request initial encoding status
+            socket.emit('request_encoding_status');
         });
         
         socket.on('disconnect', function() {
@@ -315,26 +320,138 @@
         });
         
         // Encoding WebSocket event listeners
-        socket.on('encoding_status', function(data) {
-            console.log('Encoding status update:', data);
+        socket.on('encoding_status_update', function(data) {
+            console.log('🔄 Encoding status update received:', data);
             if (window.EncodingUI) {
                 window.EncodingUI.handleEncodingStatusUpdate(data);
             }
         });
         
         socket.on('encoding_progress', function(data) {
-            console.log('Encoding progress update:', data);
+            console.log('📊 Encoding progress update received:', data);
+            console.log('📊 Job ID:', data.job_id, 'Progress:', data.progress.percentage + '%');
             if (window.EncodingUI) {
                 window.EncodingUI.handleEncodingProgress(data);
+            } else {
+                // Fallback if EncodingUI not loaded yet
+                console.log('⚠️ EncodingUI not available, using fallback progress handler');
+                handleEncodingProgressFallback(data);
             }
         });
         
         socket.on('encoding_status_change', function(data) {
-            console.log('Encoding status change:', data);
+            console.log('🔄 Encoding status change received:', data);
+            console.log('🔄 Job ID:', data.job_id, 'Status:', data.status);
             if (window.EncodingUI) {
                 window.EncodingUI.handleEncodingStatusChange(data);
+            } else {
+                // Fallback if EncodingUI not loaded yet
+                console.log('⚠️ EncodingUI not available, using fallback status handler');
+                handleEncodingStatusChangeFallback(data);
             }
         });
+        
+        // Fallback handlers for when EncodingUI is not loaded
+        function handleEncodingProgressFallback(data) {
+            const { job_id, progress } = data;
+            const fileName = extractFileNameFromJobIdFallback(job_id);
+            console.log(`Fallback: Progress update for ${fileName}: ${progress.percentage}%`);
+            
+            // Update progress display if it exists
+            const progressDiv = document.getElementById(`progress-${fileName}`);
+            if (progressDiv) {
+                updateProgressDisplayFallback(progressDiv, progress);
+            }
+        }
+        
+        function handleEncodingStatusChangeFallback(data) {
+            const { job_id, status } = data;
+            const fileName = extractFileNameFromJobIdFallback(job_id);
+            console.log(`Fallback: Status change for ${fileName}: ${status}`);
+            
+            // Update file list item status
+            const fileItem = document.querySelector(`[data-filename="${CSS.escape(fileName)}"]`);
+            if (fileItem) {
+                updateFileItemStatusFallback(fileItem, status);
+            }
+        }
+        
+        function extractFileNameFromJobIdFallback(job_id) {
+            const parts = job_id.split('_');
+            if (parts.length >= 3) {
+                return parts.slice(0, -2).join('_');
+            }
+            return job_id;
+        }
+        
+        function updateProgressDisplayFallback(progressDiv, progress) {
+            // Update progress bar
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.style.width = `${progress.percentage}%`;
+            }
+            
+            // Update percentage
+            const percentageSpan = progressDiv.querySelector('.progress-metric .metric-value');
+            if (percentageSpan) {
+                percentageSpan.textContent = `${progress.percentage.toFixed(1)}%`;
+            }
+            
+            // Update phase
+            const phaseSpan = progressDiv.querySelector('.encoding-phase');
+            if (phaseSpan) {
+                phaseSpan.className = `encoding-phase ${progress.phase}`;
+                phaseSpan.textContent = progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1);
+            }
+            
+            // Update FPS and ETA
+            const rightMetrics = progressDiv.querySelector('.progress-metrics > div:last-child');
+            if (rightMetrics) {
+                const fpsValue = rightMetrics.querySelector('.progress-metric:first-child .metric-value');
+                if (fpsValue && progress.fps) {
+                    fpsValue.textContent = progress.fps.toFixed(1);
+                }
+                
+                const etaValue = rightMetrics.querySelector('.progress-metric:last-child .metric-value');
+                if (etaValue && progress.time_remaining) {
+                    const minutes = Math.floor(progress.time_remaining / 60);
+                    const seconds = progress.time_remaining % 60;
+                    etaValue.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }
+        }
+        
+        function updateFileItemStatusFallback(fileItem, status) {
+            // Remove existing status classes
+            fileItem.classList.remove('queued', 'encoding', 'completed', 'failed');
+            
+            // Add new status class
+            if (status && status !== 'not_queued') {
+                fileItem.classList.add(status);
+            }
+            
+            // Update file info text
+            const fileInfo = fileItem.querySelector('.file-info');
+            if (fileInfo) {
+                let infoText = fileInfo.textContent;
+                
+                // Remove existing encoding status
+                infoText = infoText.replace(/ • (Queued|Encoding|Completed|Failed)/g, '');
+                
+                // Add new encoding status
+                if (status && status !== 'not_queued') {
+                    const statusMap = {
+                        'queued': 'Queued',
+                        'encoding': 'Encoding',
+                        'completed': 'Completed',
+                        'failed': 'Failed'
+                    };
+                    infoText += ` • ${statusMap[status] || status}`;
+                }
+                
+                fileInfo.textContent = infoText;
+            }
+        }
         
         // File list updates
         socket.on('file_list_update', function(data) {

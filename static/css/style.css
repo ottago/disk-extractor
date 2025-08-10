@@ -584,6 +584,44 @@ body {
     font-size: 0.9rem;
 }
 
+/* Encoding status indicators */
+.file-item.queued {
+    border-left: 4px solid #6c757d;
+    background-color: #f8f9fa;
+}
+
+.file-item.encoding {
+    border-left: 4px solid #ffc107;
+    background-color: #fff3cd;
+}
+
+.file-item.encoding-complete {
+    border-left: 4px solid #28a745;
+    background-color: #d4edda;
+}
+
+.file-item.encoding-failed {
+    border-left: 4px solid #dc3545;
+    background-color: #f8d7da;
+}
+
+.encoding-progress {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #ffc107;
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    display: none;
+}
+
+.file-item.encoding .encoding-progress {
+    display: block;
+}
+
 /* Stats for Nerds section */
 .stats-for-nerds {
     position: fixed;

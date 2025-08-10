@@ -12,6 +12,8 @@ import threading
 import time
 import re
 import uuid
+import select
+import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Callable
@@ -149,6 +151,7 @@ class EncodingEngine:
     
     def _notify_progress(self, job_id: str, progress: EncodingProgress) -> None:
         """Notify all progress callbacks"""
+        logger.debug(f"Notifying progress for {job_id}: {progress.percentage}% ({progress.phase})")
         for callback in self.progress_callbacks:
             try:
                 callback(job_id, progress)
@@ -432,13 +435,13 @@ class EncodingEngine:
             
             logger.info(f"Executing HandBrake command for {job_id}: {' '.join(cmd)}")
             
-            # Start the process
+            # Start the process with stderr redirected to stdout
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=1
+                stderr=subprocess.STDOUT,  # Redirect stderr to stdout
+                universal_newlines=False,  # Raw bytes mode
+                bufsize=0                  # Unbuffered
             )
             
             # Store process reference
@@ -446,52 +449,97 @@ class EncodingEngine:
                 self.job_processes[job_id] = process
             
             # Monitor progress and wait for completion in the same thread
-            stdout_lines = []
-            stderr_lines = []
+            all_output = []
+            output_buffer = b''  # Buffer for incomplete lines
             
-            # Read output line by line while process is running
+            # Use select() to efficiently wait for output
             while process.poll() is None:
                 if not self.running:
                     process.terminate()
                     break
                 
-                # Read stderr for progress information
-                if process.stderr:
-                    line = process.stderr.readline()
-                    if line:
-                        logger.debug(f"{job_id} STDERR: {line}")
-                        stderr_lines.append(line)
-                        progress = self._parse_handbrake_progress(line.strip())
-                        if progress:
-                            job.progress = progress
-                            self._notify_progress(job_id, progress)
+                # Wait for data to be available on stdout (which includes stderr)
+                # Use a short timeout to check process status periodically
+                if sys.platform != 'win32':  # select() works differently on Windows
+                    ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                    
+                    if ready:
+                        # Data is available, read it
+                        chunk = process.stdout.read(4096)  # Larger chunks since we're not polling
+                        if chunk:
+                            output_buffer += chunk
                             
-                            # Save progress periodically
-                            if (progress.percentage > 0 and 
-                                progress.percentage % 5 == 0 and 
-                                progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
-                                job.progress.last_saved_percentage = progress.percentage
-                                self._persist_job_status(job_id, job)
-                
-                # Read stdout to prevent buffer overflow
-                if process.stdout:
-                    logger.debug(f"{job_id} STDOUT: {line}")
-                    stdout_line = process.stdout.readline()
-                    if stdout_line:
-                        stdout_lines.append(stdout_line)
-                
-                # NKW time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+                            # Process complete lines and carriage return updates
+                            while b'\n' in output_buffer or b'\r' in output_buffer:
+                                if b'\n' in output_buffer:
+                                    line, output_buffer = output_buffer.split(b'\n', 1)
+                                    line_str = line.decode('utf-8', errors='ignore').strip()
+                                elif b'\r' in output_buffer:
+                                    line, output_buffer = output_buffer.split(b'\r', 1)
+                                    line_str = line.decode('utf-8', errors='ignore').strip()
+                                else:
+                                    break
+                                    
+                                if line_str:  # Only process non-empty lines
+                                    logger.debug(f"{job_id} OUTPUT: {repr(line_str)}")
+                                    all_output.append(line_str + '\n')
+                                    
+                                    # Try to parse as progress (HandBrake progress comes via stderr)
+                                    progress = self._parse_handbrake_progress(line_str)
+                                    if progress:
+                                        job.progress = progress
+                                        self._notify_progress(job_id, progress)
+                                        
+                                        # Save progress periodically
+                                        if (progress.percentage > 0 and 
+                                            progress.percentage % 5 == 0 and 
+                                            progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
+                                            job.progress.last_saved_percentage = progress.percentage
+                                            self._persist_job_status(job_id, job)
+                else:
+                    # Fallback for Windows - use small sleep
+                    chunk = process.stdout.read(4096)
+                    if chunk:
+                        output_buffer += chunk
+                        
+                        # Process lines (same logic as above)
+                        while b'\n' in output_buffer or b'\r' in output_buffer:
+                            if b'\n' in output_buffer:
+                                line, output_buffer = output_buffer.split(b'\n', 1)
+                                line_str = line.decode('utf-8', errors='ignore').strip()
+                            elif b'\r' in output_buffer:
+                                line, output_buffer = output_buffer.split(b'\r', 1)
+                                line_str = line.decode('utf-8', errors='ignore').strip()
+                            else:
+                                break
+                                
+                            if line_str:
+                                logger.debug(f"{job_id} OUTPUT: {repr(line_str)}")
+                                all_output.append(line_str + '\n')
+                                
+                                progress = self._parse_handbrake_progress(line_str)
+                                if progress:
+                                    job.progress = progress
+                                    self._notify_progress(job_id, progress)
+                                    
+                                    if (progress.percentage > 0 and 
+                                        progress.percentage % 5 == 0 and 
+                                        progress.percentage != getattr(job.progress, 'last_saved_percentage', -1)):
+                                        job.progress.last_saved_percentage = progress.percentage
+                                        self._persist_job_status(job_id, job)
+                    else:
+                        time.sleep(0.01)  # Only sleep on Windows when no data
             
             # Get any remaining output
-            remaining_stdout, remaining_stderr = process.communicate()
-            if remaining_stdout:
-                stdout_lines.append(remaining_stdout)
-            if remaining_stderr:
-                stderr_lines.append(remaining_stderr)
+            remaining_output = process.communicate()[0]  # Only stdout since stderr is redirected
+            if remaining_output:
+                remaining_str = remaining_output.decode('utf-8', errors='ignore')
+                all_output.append(remaining_str)
             
-            # Combine all output
-            stdout = ''.join(stdout_lines)
-            stderr = ''.join(stderr_lines)
+            # Combine all output (both stdout and stderr are now in one stream)
+            combined_output = ''.join(all_output)
+            stdout = combined_output  # For compatibility
+            stderr = ""  # Empty since everything is in stdout now
             
             # Clean up process reference
             with self._lock:
@@ -612,7 +660,12 @@ class EncodingEngine:
             if "Encoding:" in line or "Scanning" in line or "%" in line:
                 logger.debug(f"HandBrake output: {line}")
             
-            # HandBrake progress format: "Encoding: task 1 of 1, 45.67 % (123.45 fps, avg 98.76 fps, ETA 01h23m45s)"
+            # HandBrake progress formats:
+            # "Encoding: task 1 of 1, 45.67 % (123.45 fps, avg 98.76 fps, ETA 01h23m45s)"
+            # "Encoding: task 1 of 1, 45.67 %"
+            # "Encoding: task 1 of 2, 9.60 % (0.00 fps, avg 0.00 fps, ETA 00h00m00s)"
+            
+            # First try to match the full format with fps and ETA
             progress_match = re.search(r'Encoding:.*?(\d+\.?\d*)\s*%.*?(\d+\.?\d*)\s*fps.*?ETA\s*(\d+h)?(\d+m)?(\d+s)?', line)
             
             if progress_match:
@@ -634,17 +687,33 @@ class EncodingEngine:
                     last_updated=datetime.now().isoformat()
                 )
                 
-                logger.debug(f"Parsed progress: {percentage}% at {fps} fps")
+                logger.debug(f"Parsed progress (full): {percentage}% at {fps} fps, ETA {time_remaining}s")
+                return progress
+            
+            # If that fails, try to match just the percentage
+            simple_progress_match = re.search(r'Encoding:.*?(\d+\.?\d*)\s*%', line)
+            
+            if simple_progress_match:
+                percentage = float(simple_progress_match.group(1))
+                
+                progress = EncodingProgress(
+                    percentage=percentage,
+                    fps=0.0,
+                    time_remaining=0,
+                    phase=EncodingPhase.ENCODING,
+                    last_updated=datetime.now().isoformat()
+                )
+                
+                logger.debug(f"Parsed progress (simple): {percentage}%")
                 return progress
             
             # Check for scanning phase
-            if "Scanning title" in line:
+            if "Scanning title" in line or "scan:" in line:
                 progress = EncodingProgress(
                     percentage=0.0,
                     phase=EncodingPhase.SCANNING,
                     last_updated=datetime.now().isoformat()
                 )
-
                 logger.debug("Detected scanning phase")
                 return progress
             

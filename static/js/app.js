@@ -1098,6 +1098,112 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeStatsForNerds();
 });
 
+// Encoding progress and status update functions
+function updateEncodingProgress(jobId, progress) {
+    console.log(`Updating progress for job ${jobId}:`, progress);
+    
+    // If we're on the encoding page, let encoding.js handle it
+    if (typeof updateJobProgress === 'function') {
+        updateJobProgress(jobId, progress);
+    }
+    
+    // Update file list indicators using the mapping from encoding.js
+    if (typeof window.jobToFileMapping !== 'undefined') {
+        const fileName = window.jobToFileMapping[jobId];
+        if (fileName) {
+            updateFileEncodingIndicator(fileName, progress);
+        }
+    }
+}
+
+function updateEncodingStatus(jobId, status) {
+    console.log(`Updating status for job ${jobId}:`, status);
+    
+    // If we're on the encoding page, let encoding.js handle it
+    if (typeof updateJobStatus === 'function') {
+        updateJobStatus(jobId, status);
+    }
+    
+    // Update file list indicators using the mapping from encoding.js
+    if (typeof window.jobToFileMapping !== 'undefined') {
+        const fileName = window.jobToFileMapping[jobId];
+        if (fileName) {
+            updateFileEncodingStatus(fileName, status);
+        }
+    }
+    
+    // Update "Add to Queue" buttons based on status
+    updateAddToQueueButtons();
+}
+
+function updateFileEncodingIndicator(fileName, progress) {
+    // Find the file item that corresponds to this filename
+    const fileItems = document.querySelectorAll('.file-item');
+    fileItems.forEach(item => {
+        if (item.dataset.filename === fileName) {
+            // Update progress indicator for this file
+            let progressIndicator = item.querySelector('.encoding-progress');
+            if (!progressIndicator) {
+                progressIndicator = document.createElement('div');
+                progressIndicator.className = 'encoding-progress';
+                item.appendChild(progressIndicator);
+            }
+            progressIndicator.textContent = `${Math.round(progress.percentage)}%`;
+            progressIndicator.style.display = 'block';
+            
+            // Add encoding class
+            item.classList.add('encoding');
+        }
+    });
+}
+
+function updateFileEncodingStatus(fileName, status) {
+    // Update file indicators based on encoding status
+    const fileItems = document.querySelectorAll('.file-item');
+    fileItems.forEach(item => {
+        if (item.dataset.filename === fileName) {
+            // Remove any existing status classes
+            item.classList.remove('encoding', 'encoding-complete', 'encoding-failed', 'queued');
+            
+            // Add appropriate status class
+            switch (status) {
+                case 'queued':
+                    item.classList.add('queued');
+                    break;
+                case 'encoding':
+                    item.classList.add('encoding');
+                    break;
+                case 'completed':
+                    item.classList.add('encoding-complete');
+                    // Hide progress indicator
+                    const progressIndicator = item.querySelector('.encoding-progress');
+                    if (progressIndicator) {
+                        progressIndicator.style.display = 'none';
+                    }
+                    break;
+                case 'failed':
+                    item.classList.add('encoding-failed');
+                    // Hide progress indicator
+                    const failedProgressIndicator = item.querySelector('.encoding-progress');
+                    if (failedProgressIndicator) {
+                        failedProgressIndicator.style.display = 'none';
+                    }
+                    break;
+            }
+        }
+    });
+}
+
+function updateAddToQueueButtons() {
+    // Update "Add to Queue" buttons based on current encoding status
+    const addButtons = document.querySelectorAll('[data-action="add-to-queue"]');
+    addButtons.forEach(button => {
+        // You might want to disable buttons for files already in queue
+        // or update button text based on status
+        // This depends on your specific UI requirements
+    });
+}
+
 // Listen for settings changes via WebSocket
 if (typeof socket !== 'undefined') {
     socket.on('settings_updated', function(data) {
@@ -1105,4 +1211,7 @@ if (typeof socket !== 'undefined') {
             toggleStatsForNerds(data.settings.stats_for_nerds);
         }
     });
+    
+    // Note: Encoding progress and status events are handled by encoding.js
+    // to avoid conflicts and ensure proper handling
 }

@@ -6,6 +6,8 @@
     let encodingJobs = {};
     let encodingStatus = {};
     let selectedFile = null;
+    let jobToFileMapping = {}; // Maps job_id to filename
+    let fileToJobsMapping = {}; // Maps filename to array of job_ids
     
     // Initialize encoding UI
     function initializeEncodingUI() {
@@ -24,6 +26,154 @@
         console.log('Encoding UI initialized');
     }
     
+    // Update job progress (called from WebSocket events)
+    function updateJobProgress(jobId, progress) {
+        console.log(`Updating job progress: ${jobId}`, progress);
+        
+        // Update global state
+        if (encodingJobs[jobId]) {
+            encodingJobs[jobId].progress = progress;
+        }
+        
+        // Get the filename for this job
+        const fileName = jobToFileMapping[jobId];
+        if (fileName) {
+            console.log(`Job ${jobId} belongs to file ${fileName}`);
+            // Update file-specific UI elements
+            updateFileEncodingProgress(fileName, progress);
+        }
+        
+        // Update UI elements in encoding page
+        const progressBar = document.querySelector(`[data-job-id="${jobId}"] .progress-bar`);
+        if (progressBar) {
+            progressBar.style.width = `${progress.percentage}%`;
+            progressBar.textContent = `${Math.round(progress.percentage)}%`;
+        }
+        
+        const statusText = document.querySelector(`[data-job-id="${jobId}"] .status-text`);
+        if (statusText) {
+            statusText.textContent = `${progress.phase} - ${Math.round(progress.percentage)}%`;
+        }
+        
+        // Update FPS and time remaining if available
+        const fpsText = document.querySelector(`[data-job-id="${jobId}"] .fps-text`);
+        if (fpsText && progress.fps) {
+            fpsText.textContent = `${progress.fps.toFixed(1)} fps`;
+        }
+        
+        const etaText = document.querySelector(`[data-job-id="${jobId}"] .eta-text`);
+        if (etaText && progress.time_remaining) {
+            const minutes = Math.floor(progress.time_remaining / 60);
+            const seconds = progress.time_remaining % 60;
+            etaText.textContent = `ETA: ${minutes}m ${seconds}s`;
+        }
+    }
+    
+    // Update job status (called from WebSocket events)
+    function updateJobStatus(jobId, status) {
+        console.log(`Updating job status: ${jobId} -> ${status}`);
+        
+        // Update global state
+        encodingStatus[jobId] = status;
+        if (encodingJobs[jobId]) {
+            encodingJobs[jobId].status = status;
+        }
+        
+        // Get the filename for this job
+        const fileName = jobToFileMapping[jobId];
+        if (fileName) {
+            console.log(`Job ${jobId} belongs to file ${fileName}`);
+            // Update file-specific UI elements
+            updateFileEncodingStatusByName(fileName, status);
+        }
+        
+        // Update UI elements in encoding page
+        const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
+        if (jobElement) {
+            // Remove old status classes
+            jobElement.classList.remove('status-queued', 'status-encoding', 'status-completed', 'status-failed', 'status-cancelled');
+            
+            // Add new status class
+            jobElement.classList.add(`status-${status}`);
+            
+            // Update status text
+            const statusText = jobElement.querySelector('.status-text');
+            if (statusText) {
+                statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            }
+        }
+        
+        // Refresh the encoding status display
+        requestEncodingStatus();
+    }
+    
+    // Update file encoding progress in the main file list
+    function updateFileEncodingProgress(fileName, progress) {
+        const fileItems = document.querySelectorAll('.file-item');
+        fileItems.forEach(item => {
+            if (item.dataset.filename === fileName) {
+                // Update progress indicator for this file
+                let progressIndicator = item.querySelector('.encoding-progress');
+                if (!progressIndicator) {
+                    progressIndicator = document.createElement('div');
+                    progressIndicator.className = 'encoding-progress';
+                    item.appendChild(progressIndicator);
+                }
+                progressIndicator.textContent = `${Math.round(progress.percentage)}%`;
+                progressIndicator.style.display = 'block';
+                
+                // Add encoding class if not already present
+                if (!item.classList.contains('encoding')) {
+                    item.classList.add('encoding');
+                }
+            }
+        });
+    }
+    
+    // Update file encoding status in the main file list
+    function updateFileEncodingStatusByName(fileName, status) {
+        const fileItems = document.querySelectorAll('.file-item');
+        fileItems.forEach(item => {
+            if (item.dataset.filename === fileName) {
+                // Remove any existing status classes
+                item.classList.remove('encoding', 'encoding-complete', 'encoding-failed', 'queued');
+                
+                // Add appropriate status class
+                switch (status) {
+                    case 'queued':
+                        item.classList.add('queued');
+                        break;
+                    case 'encoding':
+                        item.classList.add('encoding');
+                        break;
+                    case 'completed':
+                        item.classList.add('encoding-complete');
+                        // Hide progress indicator
+                        const progressIndicator = item.querySelector('.encoding-progress');
+                        if (progressIndicator) {
+                            progressIndicator.style.display = 'none';
+                        }
+                        break;
+                    case 'failed':
+                        item.classList.add('encoding-failed');
+                        // Hide progress indicator
+                        const failedProgressIndicator = item.querySelector('.encoding-progress');
+                        if (failedProgressIndicator) {
+                            failedProgressIndicator.style.display = 'none';
+                        }
+                        break;
+                }
+            }
+        });
+    }
+    
+    // Make functions and mappings globally available
+    window.updateJobProgress = updateJobProgress;
+    window.updateJobStatus = updateJobStatus;
+    window.jobToFileMapping = jobToFileMapping;
+    window.fileToJobsMapping = fileToJobsMapping;
+    window.queueEncodingJob = queueEncodingJob;
+    
     // Request encoding status from server
     function requestEncodingStatus() {
         if (window.socket && window.socket.connected) {
@@ -41,21 +191,38 @@
     
     // Handle encoding progress updates
     function handleEncodingProgress(data) {
-        console.log('Handling encoding progress update:', data);
+        console.log('🎯 EncodingUI.handleEncodingProgress called with:', data);
         const { job_id, progress } = data;
+        
+        // Extract filename from job ID
+        const fileName = extractFileNameFromJobId(job_id);
+        console.log(`📊 Progress update for job ${job_id} -> file ${fileName}: ${progress.percentage}%`);
+        
+        // Update the job-to-file mapping if not already present
+        if (!jobToFileMapping[job_id]) {
+            jobToFileMapping[job_id] = fileName;
+            console.log(`✅ Added job-to-file mapping: ${job_id} -> ${fileName}`);
+        }
         
         // Update progress display for the specific job
         updateProgressDisplay(job_id, progress);
         
-        // Update file list if needed
-        const fileName = extractFileNameFromJobId(job_id);
-        updateFileEncodingStatus(fileName);
+        // Update file list status
+        updateFileEncodingStatus(fileName, 'encoding');
     }
     
     // Handle encoding status changes
     function handleEncodingStatusChange(data) {
         const { job_id, status } = data;
         const fileName = extractFileNameFromJobId(job_id);
+        
+        console.log(`Status change for job ${job_id} -> file ${fileName}: ${status}`);
+        
+        // Update the job-to-file mapping if not already present
+        if (!jobToFileMapping[job_id]) {
+            jobToFileMapping[job_id] = fileName;
+            console.log(`Added job-to-file mapping: ${job_id} -> ${fileName}`);
+        }
         
         // Update file status
         updateFileEncodingStatus(fileName, status);
@@ -278,11 +445,37 @@
     
     // Update progress display for a specific job
     function updateProgressDisplay(jobId, progress) {
-        const fileName = jobId.split('_')[0];
+        // Extract filename from job ID
+        const fileName = extractFileNameFromJobId(jobId);
         const progressDiv = document.getElementById(`progress-${fileName}`);
         
-        if (!progressDiv) return;
+        console.log(`🎯 updateProgressDisplay called for job ${jobId} -> file ${fileName}`);
+        console.log(`🔍 Looking for progress div: progress-${fileName}`);
+        console.log(`📍 Progress div found:`, progressDiv);
         
+        if (!progressDiv) {
+            console.log(`⚠️ Progress div not found for ${fileName}, creating one`);
+            // Try to find the file item and add progress display
+            const fileItem = document.querySelector(`[data-filename="${CSS.escape(fileName)}"]`);
+            console.log(`🔍 File item found:`, fileItem);
+            if (fileItem) {
+                const newProgressDiv = createProgressDisplay(fileName);
+                fileItem.appendChild(newProgressDiv);
+                console.log(`✅ Created new progress display for ${fileName}`);
+                // Update the newly created progress display
+                updateProgressDisplayElements(newProgressDiv, progress);
+            } else {
+                console.warn(`❌ File item not found for ${fileName}`);
+            }
+            return;
+        }
+        
+        console.log(`✅ Updating existing progress display for ${fileName}`);
+        updateProgressDisplayElements(progressDiv, progress);
+    }
+    
+    // Helper function to update progress display elements
+    function updateProgressDisplayElements(progressDiv, progress) {
         // Update progress bar
         const progressBar = progressDiv.querySelector('.progress-bar');
         if (progressBar) {
@@ -302,19 +495,16 @@
             phaseSpan.textContent = formatEncodingPhase(progress.phase);
         }
         
-        // Update FPS
+        // Update FPS and ETA
         const rightMetrics = progressDiv.querySelector('.progress-metrics > div:last-child');
         if (rightMetrics) {
             const fpsValue = rightMetrics.querySelector('.progress-metric:first-child .metric-value');
-            if (fpsValue) {
+            if (fpsValue && progress.fps) {
                 fpsValue.textContent = progress.fps.toFixed(1);
             }
-        }
-        
-        // Update ETA
-        if (rightMetrics) {
+            
             const etaValue = rightMetrics.querySelector('.progress-metric:last-child .metric-value');
-            if (etaValue) {
+            if (etaValue && progress.time_remaining) {
                 etaValue.textContent = formatTime(progress.time_remaining);
             }
         }
@@ -439,11 +629,24 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
+            if (data.success && data.job_id) {
+                // Store the job-to-file mapping
+                jobToFileMapping[data.job_id] = fileName;
+                
+                // Store the file-to-jobs mapping
+                if (!fileToJobsMapping[fileName]) {
+                    fileToJobsMapping[fileName] = [];
+                }
+                fileToJobsMapping[fileName].push(data.job_id);
+                
+                console.log(`Job ${data.job_id} queued for file ${fileName}`);
                 showAlert(`Queued encoding job for "${movieName}"`, 'success');
                 requestEncodingStatus();
+                
+                // Update UI immediately to show job is queued
+                updateFileEncodingStatus(fileName, 'queued');
             } else {
-                showAlert('Error queuing encoding job: ' + data.error, 'error');
+                showAlert('Error queuing encoding job: ' + (data.error || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
@@ -576,6 +779,17 @@
         }
     };
     
-    // Initialize when DOM is loaded
-    document.addEventListener('DOMContentLoaded', initializeEncodingUI);
+    // Initialize when DOM is loaded or immediately if already loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeEncodingUI);
+    } else {
+        // DOM is already loaded
+        initializeEncodingUI();
+    }
+    
+    // Also initialize if WebSocket is already connected
+    if (window.socket && window.socket.connected) {
+        console.log('WebSocket already connected, initializing EncodingUI');
+        initializeEncodingUI();
+    }
 })();

@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from config import Config
 from utils.validation import validate_filename, ValidationError
 
+# Import HandBrakeError from handbrake_scanner
+from models.handbrake_scanner import HandBrakeError
+
 logger = logging.getLogger(__name__)
 
 
