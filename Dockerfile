@@ -169,8 +169,21 @@ RUN chmod +x /usr/local/bin/HandBrakeCLI
 RUN echo "=== HandBrake Installation Verification ===" \
     && /usr/local/bin/HandBrakeCLI --version 2>/dev/null | head -1 || echo "HandBrake installed (with warnings)"
 
-# Create application user
-RUN useradd -m -u 1001 appuser
+# Use existing ubuntu user (UID 1000) or create appuser with different UID
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# If using UID 1000, we'll use the existing ubuntu user, otherwise create appuser
+RUN if [ "${USER_ID}" = "1000" ]; then \
+        # Use existing ubuntu user and group
+        usermod -l appuser ubuntu && \
+        groupmod -n appuser ubuntu && \
+        usermod -d /home/appuser -m appuser; \
+    else \
+        # Create new user with custom UID/GID
+        (groupadd -g ${GROUP_ID} appuser || true) && \
+        useradd -m -u ${USER_ID} -g ${GROUP_ID} appuser; \
+    fi
 
 # Install Python dependencies
 COPY requirements.txt .

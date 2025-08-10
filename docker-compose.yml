@@ -1,6 +1,11 @@
 services:
   disk-extractor:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: 1000  # Change to your desired UID
+        GROUP_ID: 1000 # Change to your desired GID
     container_name: disk-extractor
     ports:
       - "5000:5000"
