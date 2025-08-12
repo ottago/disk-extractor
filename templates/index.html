@@ -300,7 +300,6 @@
         socket.on('connect', function() {
             console.log('Connected to server');
             hideDisconnectionOverlay();
-            showNotification('Live file monitoring active', 'success');
             
             // Initialize encoding UI after connection
             if (window.EncodingUI && typeof window.EncodingUI.initialize === 'function') {
