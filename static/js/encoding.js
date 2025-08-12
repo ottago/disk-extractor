@@ -684,6 +684,17 @@
         // Clear existing buttons
         queueActions.innerHTML = '';
         
+        // Check if there's a scan error - if so, don't show queue buttons
+        // The scan error check should look at the current enhancedMetadata or scan error state
+        const scanErrorElement = document.getElementById('scanError');
+        const hasScanError = scanErrorElement && scanErrorElement.style.display !== 'none';
+        
+        if (hasScanError) {
+            // Don't show any queue management buttons when there's a scan error
+            // The "Show logs" button is handled separately by the scan error logic
+            return;
+        }
+        
         // Add appropriate button based on status
         if (status === 'not_queued') {
             const addButton = document.createElement('button');

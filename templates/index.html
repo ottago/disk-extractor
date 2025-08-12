@@ -65,12 +65,8 @@
                             <span id="currentFileSize"></span>
                         </div>
                         <div class="action-buttons">
-                            <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">
-                                🔍 Scan Media
-                            </button>
-                            <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">
-                                📄 Raw Output
-                            </button>
+                            <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">🔍 Scan Media</button>
+                            <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">📄 Raw Output</button>
                         </div>
                     </div>
                     
@@ -83,8 +79,8 @@
                 <div id="enhancedMetadata" class="enhanced-metadata">
                     <div id="scanError" class="scan-error" style="display: none;">
                         <h3>⚠️ HandBrake Scan Error</h3>
-                        <p id="scanErrorMessage"></p>
                         <button type="button" onclick="scanFile()" class="action-button scan-button">🔄 Retry Scan</button>
+                        <p id="scanErrorMessage"></p>
                     </div>
                     
                     <div class="titles-container" id="titlesContainer">

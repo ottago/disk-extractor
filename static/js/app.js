@@ -292,12 +292,33 @@ function scanFile() {
 
 // Show scan error
 function showScanError(error) {
-    document.getElementById('scanErrorMessage').textContent = error;
+    // Convert line breaks to HTML <br> tags while escaping HTML characters
+    const errorElement = document.getElementById('scanErrorMessage');
+    
+    // First escape HTML characters to prevent XSS
+    const escapedError = error
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    
+    // Then convert line breaks to <br> tags
+    const formattedError = escapedError.replace(/\n/g, '<br>');
+    
+    // Use innerHTML since we've safely escaped everything except our <br> tags
+    errorElement.innerHTML = formattedError;
+    
     document.getElementById('scanError').style.display = 'block';
     document.getElementById('enhancedMetadata').style.display = 'block';
     document.getElementById('titlesContainer').innerHTML = '';
     // Show raw output button since errors should have raw output available
     document.getElementById('rawOutputButton').style.display = 'inline-block';
+    
+    // Update queue management buttons to hide "Add to Queue" when there's a scan error
+    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
+        window.EncodingUI.updateQueueManagementButtons();
+    }
 }
 
 // Display enhanced metadata
@@ -311,6 +332,11 @@ function displayEnhancedMetadata() {
     
     // Hide error if showing
     document.getElementById('scanError').style.display = 'none';
+    
+    // Update queue management buttons since scan error is now cleared
+    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
+        window.EncodingUI.updateQueueManagementButtons();
+    }
     
     // Show enhanced metadata section
     document.getElementById('enhancedMetadata').style.display = 'block';
