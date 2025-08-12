@@ -1243,3 +1243,166 @@ body {
 .btn-primary:hover {
     background: #0056b3;
 }
+/* Enhanced Notifications */
+.notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 400px;
+}
+
+.enhanced-notification {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 10px;
+    border-left: 4px solid #007bff;
+    animation: slideIn 0.3s ease-out;
+    transition: opacity 0.3s ease-out;
+}
+
+.enhanced-notification.success {
+    border-left-color: #28a745;
+}
+
+.enhanced-notification.error {
+    border-left-color: #dc3545;
+}
+
+.enhanced-notification.fade-out {
+    opacity: 0;
+    transform: translateX(100%);
+}
+
+.notification-content {
+    display: flex;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 12px;
+}
+
+.notification-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.notification-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    font-weight: 600;
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.notification-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.notification-filename {
+    font-size: 12px;
+    color: #888;
+    font-family: monospace;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.notification-error {
+    font-size: 12px;
+    color: #dc3545;
+    background: #f8d7da;
+    padding: 4px 8px;
+    border-radius: 3px;
+    margin-top: 4px;
+}
+
+.notification-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.notification-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.delete-btn {
+    background: #dc3545;
+    color: white;
+}
+
+.delete-btn:hover {
+    background: #c82333;
+}
+
+.view-logs-btn {
+    background: #007bff;
+    color: white;
+}
+
+.view-logs-btn:hover {
+    background: #0056b3;
+}
+
+.close-btn {
+    background: #6c757d;
+    color: white;
+    padding: 4px 8px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    background: #5a6268;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Mobile responsiveness for notifications */
+@media (max-width: 768px) {
+    .notification-container {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+    }
+    
+    .notification-content {
+        padding: 12px;
+        gap: 8px;
+    }
+    
+    .notification-actions {
+        flex-direction: row;
+        gap: 4px;
+    }
+    
+    .notification-btn {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+}

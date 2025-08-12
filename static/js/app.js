@@ -204,13 +204,29 @@ function loadEnhancedMetadata(filename) {
                     return;
                 }
                 
-                if (data.success && data.metadata && data.metadata.titles && data.metadata.titles.length > 0) {
-                    // We have cached HandBrake data - display it
-                    console.log('Setting enhancedMetadata and calling displayEnhancedMetadata for', filename);
-                    enhancedMetadata = data.metadata;
-                    displayEnhancedMetadata();
-                    document.getElementById('rawOutputButton').style.display = 'inline-block';
-                    console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
+                if (data.success && data.metadata) {
+                    // Check if there's a scan error
+                    if (data.metadata.scan_error) {
+                        // Show scan error using the same UI as manual scans
+                        console.log('Scan error detected for', filename, ':', data.metadata.scan_error);
+                        showScanError(data.metadata.scan_error);
+                        // Show raw output button if available
+                        document.getElementById('rawOutputButton').style.display = 'inline-block';
+                    } else if (data.metadata.titles && data.metadata.titles.length > 0) {
+                        // We have valid HandBrake data - display it
+                        console.log('Setting enhancedMetadata and calling displayEnhancedMetadata for', filename);
+                        enhancedMetadata = data.metadata;
+                        displayEnhancedMetadata();
+                        document.getElementById('rawOutputButton').style.display = 'inline-block';
+                        console.log('Loaded cached metadata for', filename, 'with', data.metadata.titles.length, 'titles');
+                    } else {
+                        // No titles found - clear loading and hide enhanced metadata
+                        enhancedMetadata = null;
+                        document.getElementById('enhancedMetadata').style.display = 'none';
+                        document.getElementById('rawOutputButton').style.display = 'none';
+                        document.getElementById('titlesContainer').innerHTML = '';
+                        console.log('No titles found in metadata for', filename);
+                    }
                 } else {
                     // No cached data - clear loading and hide enhanced metadata
                     enhancedMetadata = null;
@@ -280,6 +296,8 @@ function showScanError(error) {
     document.getElementById('scanError').style.display = 'block';
     document.getElementById('enhancedMetadata').style.display = 'block';
     document.getElementById('titlesContainer').innerHTML = '';
+    // Show raw output button since errors should have raw output available
+    document.getElementById('rawOutputButton').style.display = 'inline-block';
 }
 
 // Display enhanced metadata
@@ -1240,6 +1258,180 @@ if (typeof socket !== 'undefined') {
             toggleStatsForNerds(data.settings.stats_for_nerds);
         }
     });
+    
+    // Listen for encoding notifications
+    socket.on('notification', function(data) {
+        handleEncodingNotification(data);
+    });
+}
+
+// Handle encoding notifications from WebSocket
+function handleEncodingNotification(data) {
+    if (!data || !data.type) return;
+    
+    switch (data.type) {
+        case 'completion':
+            showCompletionNotification(data);
+            break;
+        case 'failure':
+            showFailureNotification(data);
+            break;
+        case 'queue_empty':
+            showAlert(data.message, 'info');
+            break;
+        default:
+            showAlert(data.message, 'info');
+    }
+}
+
+// Show completion notification with delete button
+function showCompletionNotification(data) {
+    if (!data.job) {
+        showAlert(data.message, 'success');
+        return;
+    }
+    
+    const job = data.job;
+    const movieName = job.movie_name || job.file_name;
+    const outputPath = job.output_path;
+    const outputFilename = job.output_filename;
+    
+    // Create enhanced notification HTML
+    const notificationHTML = `
+        <div class="completion-notification">
+            <div class="notification-content">
+                <div class="notification-icon">✅</div>
+                <div class="notification-details">
+                    <div class="notification-title">Encoding Completed</div>
+                    <div class="notification-subtitle">${escapeHtml(movieName)}</div>
+                    <div class="notification-filename">${escapeHtml(outputFilename)}</div>
+                </div>
+                <div class="notification-actions">
+                    <button class="notification-btn delete-btn" onclick="deleteEncodedFile('${escapeHtml(outputPath)}', '${escapeHtml(outputFilename)}')">
+                        🗑️ Delete
+                    </button>
+                    <button class="notification-btn close-btn" onclick="closeNotification(this)">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    showEnhancedNotification(notificationHTML, 'success', 10000); // Show for 10 seconds
+}
+
+// Show failure notification
+function showFailureNotification(data) {
+    if (!data.job) {
+        showAlert(data.message, 'error');
+        return;
+    }
+    
+    const job = data.job;
+    const movieName = job.movie_name || job.file_name;
+    
+    // Create enhanced notification HTML
+    const notificationHTML = `
+        <div class="failure-notification">
+            <div class="notification-content">
+                <div class="notification-icon">❌</div>
+                <div class="notification-details">
+                    <div class="notification-title">Encoding Failed</div>
+                    <div class="notification-subtitle">${escapeHtml(movieName)}</div>
+                    <div class="notification-error">${escapeHtml(job.error_message || 'Unknown error')}</div>
+                </div>
+                <div class="notification-actions">
+                    <button class="notification-btn view-logs-btn" onclick="viewFailureLogs('${escapeHtml(job.file_name)}', ${job.title_number})">
+                        📄 View Logs
+                    </button>
+                    <button class="notification-btn close-btn" onclick="closeNotification(this)">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    showEnhancedNotification(notificationHTML, 'error', 15000); // Show for 15 seconds
+}
+
+// Show enhanced notification with custom HTML
+function showEnhancedNotification(html, type = 'info', duration = 5000) {
+    // Create notification container if it doesn't exist
+    let container = document.getElementById('notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+    }
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `enhanced-notification ${type}`;
+    notification.innerHTML = html;
+    
+    // Add to container
+    container.appendChild(notification);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.classList.add('fade-out');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
+    }, duration);
+}
+
+// Close notification
+function closeNotification(button) {
+    const notification = button.closest('.enhanced-notification');
+    if (notification) {
+        notification.classList.add('fade-out');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }
+}
+
+// Delete encoded file
+async function deleteEncodedFile(filePath, fileName) {
+    if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/encoding/delete-file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file_path: filePath
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert(`Successfully deleted ${data.file_name}`, 'success');
+            // Close the notification that contained the delete button
+            const deleteBtn = event.target;
+            closeNotification(deleteBtn);
+        } else {
+            showAlert(`Error deleting file: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        showAlert('Error deleting file: ' + error.message, 'error');
+    }
 }
 
 // Check encoding status for all titles and update UI

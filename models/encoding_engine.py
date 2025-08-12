@@ -758,7 +758,7 @@ class EncodingEngine:
                 # Send completion notification
                 self._send_notification(
                     'completion',
-                    f"Encoding completed successfully: {job.file_name}",
+                    f"Encoding completed successfully: {job.movie_name or job.file_name}",
                     job
                 )
             else:

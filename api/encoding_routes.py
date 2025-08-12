@@ -5,6 +5,7 @@ Provides REST endpoints for managing encoding jobs, queue, and settings.
 """
 
 import logging
+import os
 from flask import Blueprint, request, jsonify, Response
 from typing import Dict, Any, Union, List
 
@@ -469,6 +470,106 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             }), 400
         except Exception as e:
             logger.error(f"Error clearing failure: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/test-endpoint', methods=['POST'])
+    def test_endpoint() -> Union[Response, tuple]:
+        """Test endpoint to debug the issue"""
+        logger.info("Test endpoint called")
+        try:
+            data = request.get_json()
+            logger.info(f"Received data: {data}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Test endpoint working',
+                'received_data': data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in test endpoint: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
+    @bp.route('/delete-file', methods=['POST'])
+    def delete_encoded_file() -> Union[Response, tuple]:
+        """Delete an encoded file"""
+        logger.info("Delete encoded file endpoint called")
+        try:
+            data = request.get_json()
+            logger.info(f"Received data: {data}")
+            
+            if not data or 'file_path' not in data:
+                logger.warning("Missing file_path in request data")
+                return jsonify({
+                    'success': False,
+                    'error': 'file_path is required'
+                }), 400
+            
+            file_path = data['file_path']
+            logger.info(f"Processing file_path: {file_path}")
+            
+            # Basic path validation (don't use validate_filename as it's for different purpose)
+            if not file_path or '..' in file_path:
+                logger.warning(f"Invalid file path: {file_path}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid file path'
+                }), 400
+            
+            # Ensure the path is absolute (as it should be from the job output_path)
+            if not os.path.isabs(file_path):
+                logger.warning(f"File path is not absolute: {file_path}")
+                return jsonify({
+                    'success': False,
+                    'error': 'File path must be absolute'
+                }), 400
+            
+            # Check if file exists
+            if not os.path.exists(file_path):
+                logger.warning(f"File not found: {file_path}")
+                return jsonify({
+                    'success': False,
+                    'error': 'File not found'
+                }), 404
+            
+            # Additional safety check - ensure it's a regular file
+            if not os.path.isfile(file_path):
+                logger.warning(f"Path is not a file: {file_path}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Path is not a file'
+                }), 400
+            
+            # Get file info before deletion
+            file_size = os.path.getsize(file_path)
+            file_name = os.path.basename(file_path)
+            
+            # Delete the file
+            os.remove(file_path)
+            
+            logger.info(f"Deleted encoded file: {file_path} ({file_size} bytes)")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully deleted {file_name}',
+                'file_name': file_name,
+                'file_size': file_size
+            })
+            
+        except PermissionError:
+            logger.error(f"Permission denied deleting file: {file_path}")
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied - cannot delete file'
+            }), 403
+        except Exception as e:
+            logger.error(f"Error deleting encoded file: {e}")
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
