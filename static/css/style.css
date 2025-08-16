@@ -335,6 +335,20 @@ body {
     background: #555;
 }
 
+.add-to-queue-button {
+    background: #28a745;
+    color: white;
+}
+
+.add-to-queue-button:hover {
+    background: #218838;
+}
+
+.add-to-queue-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
 /* Scan error */
 .scan-error {
     background: #ffebee;
@@ -1411,6 +1425,31 @@ body {
     margin-left: 0.5rem;
     color: #28a745;
     font-size: 0.875rem;
+}
+
+/* Cancel encoding icon in title header */
+.cancel-encoding-icon {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.cancel-encoding-icon:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+/* Title encoding status styling */
+.title-encoding .title-header {
+    background: #fff3cd;
+    border-color: #ffeaa7;
+}
+
+.title-encoding .title-header:hover {
+    background: #ffeaa7;
 }
 
 /* Enhanced completion status */

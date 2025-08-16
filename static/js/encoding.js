@@ -186,7 +186,8 @@
         console.log('Handling encoding status update:', data);
         encodingStatus = data;
         updateFileListWithEncodingStatus();
-        updateQueueManagementButtons();
+        updateAddToQueueButton();
+        updateTitleEncodingStatusDisplay();
     }
     
     // Handle encoding progress updates
@@ -228,7 +229,7 @@
         updateFileEncodingStatus(fileName, status);
         
         // Update queue buttons
-        updateQueueManagementButtons();
+        updateAddToQueueButton();
         
         // Show notification if needed
         showEncodingNotification(job_id, status);
@@ -450,27 +451,22 @@
         const progressDiv = document.getElementById(`progress-${fileName}`);
         
         console.log(`🎯 updateProgressDisplay called for job ${jobId} -> file ${fileName}`);
-        console.log(`🔍 Looking for progress div: progress-${fileName}`);
-        console.log(`📍 Progress div found:`, progressDiv);
         
         if (!progressDiv) {
             console.log(`⚠️ Progress div not found for ${fileName}, creating one`);
             // Try to find the file item and add progress display
             const fileItem = document.querySelector(`[data-filename="${CSS.escape(fileName)}"]`);
             console.log(`🔍 File item found:`, fileItem);
-            if (fileItem) {
-                const newProgressDiv = createProgressDisplay(fileName);
-                fileItem.appendChild(newProgressDiv);
-                console.log(`✅ Created new progress display for ${fileName}`);
-                // Update the newly created progress display
-                updateProgressDisplayElements(newProgressDiv, progress);
-            } else {
+            if (!fileItem) {
                 console.warn(`❌ File item not found for ${fileName}`);
+                return;
             }
-            return;
+
+            progressDiv = createProgressDisplay(fileName);
+            fileItem.appendChild(progressDiv);
+            console.log(`✅ Created new progress display for ${fileName}`);
         }
         
-        console.log(`✅ Updating existing progress display for ${fileName}`);
         updateProgressDisplayElements(progressDiv, progress);
     }
     
@@ -686,62 +682,50 @@
         });
     }
     
-    // Update queue management buttons in the details pane
-    function updateQueueManagementButtons() {
+    // Update the Add to Queue button in the action buttons row
+    function updateAddToQueueButton() {
         if (!selectedFile) return;
         
-        const queueActions = document.getElementById('queueActions');
-        if (!queueActions) return;
+        const addToQueueButton = document.getElementById('addToQueueButton');
+        if (!addToQueueButton) return;
         
-        const status = getFileEncodingStatus(selectedFile);
-        
-        // Clear existing buttons
-        queueActions.innerHTML = '';
-        
-        // Check if there's a scan error - if so, don't show queue buttons
-        // The scan error check should look at the current enhancedMetadata or scan error state
+        // Check if there's a scan error - if so, don't show the button
         const scanErrorElement = document.getElementById('scanError');
         const hasScanError = scanErrorElement && scanErrorElement.style.display !== 'none';
         
         if (hasScanError) {
-            // Don't show any queue management buttons when there's a scan error
-            // The "Show logs" button is handled separately by the scan error logic
+            addToQueueButton.style.display = 'none';
             return;
         }
         
-        // Add appropriate button based on status
-        if (status === 'not_queued') {
-            const addButton = document.createElement('button');
-            addButton.className = 'queue-button add-to-queue';
-            addButton.textContent = 'Add to Queue';
-            addButton.onclick = () => addToQueue(selectedFile);
-            
-            // Check if button should be enabled (has valid selected titles)
-            const hasValidTitles = checkForValidSelectedTitles();
-            addButton.disabled = !hasValidTitles;
-            if (!hasValidTitles) {
-                addButton.title = 'Select titles with movie names to enable';
-            }
-            
-            queueActions.appendChild(addButton);
-        } else if (status === 'queued') {
-            const removeButton = document.createElement('button');
-            removeButton.className = 'queue-button remove-from-queue';
-            removeButton.textContent = 'Remove from Queue';
-            removeButton.onclick = () => removeFromQueue(selectedFile);
-            queueActions.appendChild(removeButton);
-        } else if (status === 'encoding') {
-            const cancelButton = document.createElement('button');
-            cancelButton.className = 'queue-button cancel-encoding';
-            cancelButton.textContent = 'Cancel Encoding';
-            cancelButton.onclick = () => cancelEncoding(selectedFile);
-            queueActions.appendChild(cancelButton);
+        // Check if there are titles available (either in DOM or in enhancedMetadata)
+        const titleSections = document.querySelectorAll('.title-section');
+        const hasTitlesInDOM = titleSections.length > 0;
+        const hasTitlesInMetadata = window.enhancedMetadata && window.enhancedMetadata.titles && window.enhancedMetadata.titles.length > 0;
+        
+        if (!hasTitlesInDOM && !hasTitlesInMetadata) {
+            addToQueueButton.style.display = 'none';
+            return;
+        }
+        
+        // Always show the button if we have titles
+        addToQueueButton.style.display = 'inline-flex';
+        
+        // Check if there are valid selected titles (selected + has movie name + not already encoding)
+        const hasValidTitles = checkForValidSelectedTitles();
+        
+        if (hasValidTitles) {
+            addToQueueButton.disabled = false;
+            addToQueueButton.title = 'Add selected titles to encoding queue';
+        } else {
+            addToQueueButton.disabled = true;
+            addToQueueButton.title = 'Select titles with movie names to enable (titles already encoding will be skipped)';
         }
     }
     
-    // Check if there are valid selected titles (selected + has movie name)
+    // Check if there are valid selected titles (selected + has movie name + not already encoding)
     function checkForValidSelectedTitles() {
-        // Check the current DOM state for selected titles with movie names
+        // Check the current DOM state for selected titles with movie names that aren't already encoding
         const titleSections = document.querySelectorAll('.title-section');
         
         for (const titleSection of titleSections) {
@@ -750,11 +734,241 @@
             const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
             
             if (checkbox && checkbox.checked && movieNameInput && movieNameInput.value.trim()) {
-                return true;
+                // Check if this title is already encoding
+                const isEncoding = isTitleCurrentlyEncoding(selectedFile, parseInt(titleNumber));
+                if (!isEncoding) {
+                    return true; // Found at least one valid title that's not encoding
+                }
             }
         }
         
         return false;
+    }
+    
+    // Check if a specific title is currently encoding
+    function isTitleCurrentlyEncoding(fileName, titleNumber) {
+        if (!encodingStatus.jobs || !encodingStatus.jobs.encoding) {
+            return false;
+        }
+        
+        return encodingStatus.jobs.encoding.some(job => 
+            job.file_name === fileName && job.title_number === titleNumber
+        );
+    }
+    
+    // Add selected titles to queue (new function for the action button)
+    function addSelectedTitlesToQueue() {
+        if (!selectedFile) {
+            showAlert('No file selected', 'error');
+            return;
+        }
+        
+        // Get all selected titles with movie names that aren't already encoding
+        const titleSections = document.querySelectorAll('.title-section');
+        const titlesToAdd = [];
+        
+        titleSections.forEach(titleSection => {
+            const titleNumber = parseInt(titleSection.dataset.titleNumber);
+            const checkbox = document.getElementById(`title-${titleNumber}-selected`);
+            const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
+            
+            if (checkbox && checkbox.checked && movieNameInput && movieNameInput.value.trim()) {
+                // Check if this title is already encoding or queued
+                const isEncoding = isTitleCurrentlyEncoding(selectedFile, titleNumber);
+                const isQueued = isTitleCurrentlyQueued(selectedFile, titleNumber);
+                
+                if (!isEncoding && !isQueued) {
+                    titlesToAdd.push({
+                        titleNumber: titleNumber,
+                        movieName: movieNameInput.value.trim()
+                    });
+                }
+            }
+        });
+        
+        if (titlesToAdd.length === 0) {
+            showAlert('No valid titles to add to queue. Make sure titles are selected, have movie names, and are not already encoding.', 'warning');
+            return;
+        }
+        
+        // Add each title to the queue
+        let addedCount = 0;
+        let errorCount = 0;
+        
+        const addNextTitle = (index) => {
+            if (index >= titlesToAdd.length) {
+                // All done
+                if (addedCount > 0) {
+                    showAlert(`Added ${addedCount} title${addedCount > 1 ? 's' : ''} to encoding queue`, 'success');
+                    requestEncodingStatus(); // Refresh status
+                }
+                if (errorCount > 0) {
+                    showAlert(`Failed to add ${errorCount} title${errorCount > 1 ? 's' : ''}`, 'error');
+                }
+                return;
+            }
+            
+            const title = titlesToAdd[index];
+            addTitleToQueue(selectedFile, title.titleNumber)
+                .then(() => {
+                    addedCount++;
+                    addNextTitle(index + 1);
+                })
+                .catch(error => {
+                    console.error(`Failed to add title ${title.titleNumber}:`, error);
+                    errorCount++;
+                    addNextTitle(index + 1);
+                });
+        };
+        
+        addNextTitle(0);
+    }
+    
+    // Check if a specific title is currently queued
+    function isTitleCurrentlyQueued(fileName, titleNumber) {
+        if (!encodingStatus.jobs || !encodingStatus.jobs.queued) {
+            return false;
+        }
+        
+        return encodingStatus.jobs.queued.some(job => 
+            job.file_name === fileName && job.title_number === titleNumber
+        );
+    }
+    
+    // Add a single title to the queue (returns a Promise)
+    function addTitleToQueue(fileName, titleNumber) {
+        console.log('addTitleToQueue called with:', { fileName, titleNumber });
+        
+        // Get the movie name from the DOM
+        const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
+        const movieName = movieNameInput ? movieNameInput.value.trim() : '';
+        
+        if (!movieName) {
+            console.error('Movie name is required but not found');
+            return Promise.reject(new Error('Movie name is required'));
+        }
+        
+        const requestData = {
+            file_name: fileName,
+            title_number: titleNumber,
+            movie_name: movieName
+        };
+        
+        console.log('Sending request to /api/encoding/queue with data:', requestData);
+        
+        return fetch('/api/encoding/queue', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to add to queue');
+            }
+            return data;
+        })
+        .catch(error => {
+            console.error('Error in addTitleToQueue:', error);
+            throw error;
+        });
+    }
+    
+    // Cancel encoding for a specific title
+    function cancelTitleEncoding(fileName, titleNumber) {
+        console.log('cancelTitleEncoding called for:', { fileName, titleNumber });
+        
+        if (!encodingStatus.jobs) {
+            console.log('No jobs found in status');
+            showAlert('No jobs found', 'warning');
+            return;
+        }
+        
+        console.log('Current jobs status:', encodingStatus.jobs);
+        
+        // Look for the job in both encoding and queued lists
+        let targetJob = null;
+        let jobType = null;
+        
+        // Check encoding jobs
+        if (encodingStatus.jobs.encoding) {
+            targetJob = encodingStatus.jobs.encoding.find(job => 
+                job.file_name === fileName && job.title_number === titleNumber
+            );
+            if (targetJob) jobType = 'encoding';
+        }
+        
+        // Check queued jobs if not found in encoding
+        if (!targetJob && encodingStatus.jobs.queued) {
+            targetJob = encodingStatus.jobs.queued.find(job => 
+                job.file_name === fileName && job.title_number === titleNumber
+            );
+            if (targetJob) jobType = 'queued';
+        }
+        
+        console.log('Found job:', targetJob, 'type:', jobType);
+        
+        if (!targetJob) {
+            console.log(`No job found for title ${titleNumber} in any status`);
+            showAlert(`No job found for title ${titleNumber}`, 'warning');
+            return;
+        }
+        
+        if (!targetJob.job_id) {
+            console.error('Job found but no job_id:', targetJob);
+            showAlert('Cannot cancel: job ID not found', 'error');
+            return;
+        }
+        
+        // Cancel the specific job
+        console.log(`Cancelling ${jobType} job for title ${titleNumber}: ${targetJob.job_id}`);
+        cancelEncodingJob(targetJob.job_id);
+    }
+    
+    // Update title encoding status display (show/hide cancel buttons, completion icons, etc.)
+    function updateTitleEncodingStatusDisplay() {
+        if (!selectedFile || !encodingStatus.jobs) return;
+        
+        // Get all title sections for the current file
+        const titleSections = document.querySelectorAll('.title-section');
+        
+        titleSections.forEach(titleSection => {
+            const titleNumber = parseInt(titleSection.dataset.titleNumber);
+            
+            // Find encoding status for this title
+            const isEncoding = encodingStatus.jobs.encoding && encodingStatus.jobs.encoding.some(job => 
+                job.file_name === selectedFile && job.title_number === titleNumber
+            );
+            
+            const isCompleted = encodingStatus.jobs.completed && encodingStatus.jobs.completed.some(job => 
+                job.file_name === selectedFile && job.title_number === titleNumber
+            );
+            
+            // Update cancel encoding icon
+            const cancelIcon = document.getElementById(`cancel-encoding-${titleNumber}`);
+            if (cancelIcon) {
+                cancelIcon.style.display = isEncoding ? 'inline' : 'none';
+            }
+            
+            // Update completion icon
+            const completionIcon = document.getElementById(`completion-icon-${titleNumber}`);
+            if (completionIcon) {
+                completionIcon.style.display = isCompleted ? 'inline' : 'none';
+            }
+            
+            // Add/remove encoding class to title section
+            if (isEncoding) {
+                titleSection.classList.add('title-encoding');
+            } else {
+                titleSection.classList.remove('title-encoding');
+            }
+        });
     }
     
     // Utility functions
@@ -823,11 +1037,14 @@
         handleEncodingProgress: handleEncodingProgress,
         handleEncodingStatusChange: handleEncodingStatusChange,
         updateFileListWithEncodingStatus: updateFileListWithEncodingStatus,
-        updateQueueManagementButtons: updateQueueManagementButtons,
+        updateAddToQueueButton: updateAddToQueueButton,
         checkForValidSelectedTitles: checkForValidSelectedTitles,
+        addSelectedTitlesToQueue: addSelectedTitlesToQueue,
+        cancelTitleEncoding: cancelTitleEncoding,
         setSelectedFile: function(fileName) {
             selectedFile = fileName;
-            updateQueueManagementButtons();
+            updateAddToQueueButton();
+            updateTitleEncodingStatusDisplay();
         }
     };
     

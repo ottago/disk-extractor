@@ -166,13 +166,6 @@
     background: #28a745;
 }
 
-/* Queue management buttons */
-.queue-actions {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid #dee2e6;
-}
-
 .queue-button {
     padding: 0.5rem 1rem;
     border: none;

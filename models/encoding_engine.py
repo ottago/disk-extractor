@@ -46,6 +46,7 @@ class EncodingEngine:
         self.settings = EncodingSettings.get_default()
         self.encoding_queue: Queue = Queue()
         self.active_jobs: Dict[str, EncodingJob] = {}  # job_id -> EncodingJob
+        self.queued_jobs: Dict[str, EncodingJob] = {}  # job_id -> EncodingJob (for tracking queued jobs)
         self.job_processes: Dict[str, subprocess.Popen] = {}  # job_id -> process
         self.job_futures: Dict[str, Future] = {}  # job_id -> future
         self.executor: Optional[ThreadPoolExecutor] = None
@@ -207,6 +208,10 @@ class EncodingEngine:
         # Add to queue
         self.encoding_queue.put((job_id, job))
         
+        # Track queued job
+        with self._lock:
+            self.queued_jobs[job_id] = job
+        
         # Notify queue processor that a new job is available
         with self._queue_condition:
             self._queue_condition.notify()
@@ -281,8 +286,29 @@ class EncodingEngine:
                 
                 return True
             
-            # TODO: Remove from queue if not yet started
-            logger.warning(f"Job {job_id} not found in active jobs")
+            # Check if job is queued
+            if job_id in self.queued_jobs:
+                job = self.queued_jobs[job_id]
+                
+                # Remove from queue tracking
+                del self.queued_jobs[job_id]
+                
+                # Update job status
+                job.status = EncodingStatus.CANCELLED
+                job.completed_at = datetime.now().isoformat()
+                
+                # Update metadata
+                self._persist_job_status(job_id, job)
+                
+                # Invalidate jobs cache since job status changed
+                self._invalidate_jobs_cache()
+                
+                self._notify_status_change(job_id, job.status)
+                
+                logger.info(f"Cancelled queued job {job_id}")
+                return True
+            
+            logger.warning(f"Job {job_id} not found in active or queued jobs")
             return False
     
     def get_job_status(self, job_id: str) -> Optional[EncodingJob]:
@@ -359,6 +385,22 @@ class EncodingEngine:
         
         return jobs
     
+    def get_queued_job_ids(self) -> Dict[str, str]:
+        """
+        Get job IDs for all queued jobs
+        
+        Returns:
+            Dictionary mapping job_key (file_name_title_number) to job_id
+        """
+        queued_job_ids = {}
+        
+        with self._lock:
+            for job_id, job in self.queued_jobs.items():
+                job_key = f"{job.file_name}_{job.title_number}"
+                queued_job_ids[job_key] = job_id
+        
+        return queued_job_ids
+    
     def _process_queue(self) -> None:
         """Main queue processing loop - event-driven, no polling"""
         logger.info("Queue processing thread started (event-driven)")
@@ -408,6 +450,9 @@ class EncodingEngine:
             logger.debug(f"Starting encode of {job_id}")
             if not self.running or not self.executor:
                 return
+            
+            # Remove from queued jobs tracking
+            self.queued_jobs.pop(job_id, None)
             
             # Add to active jobs
             self.active_jobs[job_id] = job

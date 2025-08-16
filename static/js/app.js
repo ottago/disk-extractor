@@ -158,6 +158,13 @@ function selectFile(filename) {
     console.log('Showing loading indicator for:', safeFilename);
     showTitlesLoading();
     
+    // Update Add to Queue button (will be disabled initially, but visible if metadata exists)
+    setTimeout(() => {
+        if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+            window.EncodingUI.updateAddToQueueButton();
+        }
+    }, 50);
+    
     // Try to load cached enhanced metadata for THIS specific file
     loadEnhancedMetadata(safeFilename);
 }
@@ -315,9 +322,9 @@ function showScanError(error) {
     // Show raw output button since errors should have raw output available
     document.getElementById('rawOutputButton').style.display = 'inline-block';
     
-    // Update queue management buttons to hide "Add to Queue" when there's a scan error
-    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
-        window.EncodingUI.updateQueueManagementButtons();
+    // Update Add to Queue button to hide it when there's a scan error
+    if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+        window.EncodingUI.updateAddToQueueButton();
     }
 }
 
@@ -333,9 +340,9 @@ function displayEnhancedMetadata() {
     // Hide error if showing
     document.getElementById('scanError').style.display = 'none';
     
-    // Update queue management buttons since scan error is now cleared
-    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
-        window.EncodingUI.updateQueueManagementButtons();
+    // Update Add to Queue button since scan error is now cleared
+    if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+        window.EncodingUI.updateAddToQueueButton();
     }
     
     // Show enhanced metadata section
@@ -366,6 +373,13 @@ function displayEnhancedMetadata() {
     });
     
     console.log('All title elements created and appended');
+    
+    // Update Add to Queue button now that titles are loaded
+    setTimeout(() => {
+        if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+            window.EncodingUI.updateAddToQueueButton();
+        }
+    }, 50);
     
     // Check encoding status for all titles after they're created
     setTimeout(() => {
@@ -474,6 +488,7 @@ function createTitleElement(title) {
             <div class="title-basic-info">
                 <span class="title-number">Title ${title.title_number}</span>
                 <span class="completion-icon" id="completion-icon-${title.title_number}" style="display: none;">✅</span>
+                <span class="cancel-encoding-icon" id="cancel-encoding-${title.title_number}" style="display: none;" onclick="event.stopPropagation(); cancelTitleEncoding(${title.title_number});" title="Cancel encoding">❌</span>
                 <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${safeSuggestedText}</span>
             </div>
             
@@ -736,16 +751,30 @@ function updateFileListStatus() {
     }
 }
 
+// Cancel encoding for a specific title
+function cancelTitleEncoding(titleNumber) {
+    if (!selectedFile) {
+        console.error('No file selected for cancelling encoding');
+        return;
+    }
+    
+    if (window.EncodingUI && window.EncodingUI.cancelTitleEncoding) {
+        window.EncodingUI.cancelTitleEncoding(selectedFile, titleNumber);
+    } else {
+        console.error('EncodingUI not available for cancelling encoding');
+    }
+}
+
 // Update queue buttons without saving metadata (for real-time updates)
 function updateQueueButtonsIfNeeded() {
-    // Update queue management buttons since title selection or movie names may have changed
-    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
-        window.EncodingUI.updateQueueManagementButtons();
+    // Update Add to Queue button since title selection or movie names may have changed
+    if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+        window.EncodingUI.updateAddToQueueButton();
     } else {
         // Try again after a short delay if EncodingUI isn't ready
         setTimeout(() => {
-            if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
-                window.EncodingUI.updateQueueManagementButtons();
+            if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+                window.EncodingUI.updateAddToQueueButton();
             }
         }, 100);
     }
@@ -830,9 +859,9 @@ function saveMetadata() {
         console.error('Error saving metadata:', error);
     });
     
-    // Update queue management buttons since title selection or movie names may have changed
-    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
-        window.EncodingUI.updateQueueManagementButtons();
+    // Update Add to Queue button since title selection or movie names may have changed
+    if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+        window.EncodingUI.updateAddToQueueButton();
     }
 }
 

@@ -67,12 +67,8 @@
                         <div class="action-buttons">
                             <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">🔍 Scan Media</button>
                             <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">📄 Raw Output</button>
+                            <button type="button" id="addToQueueButton" onclick="addSelectedTitlesToQueue()" class="action-button add-to-queue-button" style="display: none;">➕ Add to Queue</button>
                         </div>
-                    </div>
-                    
-                    <!-- Queue Management Section -->
-                    <div class="queue-actions" id="queueActions">
-                        <!-- Queue management buttons will be populated by JavaScript -->
                     </div>
                 </div>
                 
@@ -625,6 +621,15 @@
                 if (originalUpdateFileList) {
                     originalUpdateFileList(movies);
                 }
+            }
+        };
+        
+        // Make addSelectedTitlesToQueue available globally
+        window.addSelectedTitlesToQueue = function() {
+            if (window.EncodingUI && window.EncodingUI.addSelectedTitlesToQueue) {
+                window.EncodingUI.addSelectedTitlesToQueue();
+            } else {
+                console.error('EncodingUI not available');
             }
         };
     </script>

@@ -34,12 +34,17 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
     def queue_encoding() -> Union[Response, tuple]:
         """Queue a file for encoding"""
         try:
+            logger.info(f"Received encoding queue request from {request.remote_addr}")
+            
             data = request.get_json()
             if not data:
+                logger.warning("No JSON data provided in encoding queue request")
                 return jsonify({
                     'success': False,
                     'error': 'No JSON data provided'
                 }), 400
+            
+            logger.debug(f"Queue encoding request data: {data}")
             
             # Validate required fields
             file_name = data.get('file_name', '').strip()
@@ -47,18 +52,21 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             movie_name = data.get('movie_name', '').strip()
             
             if not file_name:
+                logger.warning("Missing file_name in encoding queue request")
                 return jsonify({
                     'success': False,
                     'error': 'file_name is required'
                 }), 400
             
             if title_number is None:
+                logger.warning(f"Missing title_number in encoding queue request for file: {file_name}")
                 return jsonify({
                     'success': False,
                     'error': 'title_number is required'
                 }), 400
             
             if not movie_name:
+                logger.warning(f"Missing movie_name in encoding queue request for file: {file_name}, title: {title_number}")
                 return jsonify({
                     'success': False,
                     'error': 'movie_name is required'
@@ -67,7 +75,9 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             # Validate filename
             try:
                 file_name = validate_filename(file_name)
+                logger.debug(f"Filename validation passed: {file_name}")
             except ValidationError as e:
+                logger.error(f"Filename validation failed for '{file_name}': {str(e)}")
                 return jsonify({
                     'success': False,
                     'error': f'Invalid filename: {str(e)}'
@@ -78,7 +88,9 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 title_number = int(title_number)
                 if title_number < 1:
                     raise ValueError("Title number must be positive")
-            except (ValueError, TypeError):
+                logger.debug(f"Title number validation passed: {title_number}")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Title number validation failed for '{title_number}': {str(e)}")
                 return jsonify({
                     'success': False,
                     'error': 'title_number must be a positive integer'
@@ -86,9 +98,11 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             
             # Optional preset name
             preset_name = data.get('preset_name', '').strip()
+            logger.debug(f"Using preset: {preset_name or 'default'}")
             
             # Check if file exists
             if not metadata_manager.directory:
+                logger.error("No directory configured for metadata manager")
                 return jsonify({
                     'success': False,
                     'error': 'No directory configured'
@@ -96,10 +110,13 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             
             img_path = metadata_manager.directory / file_name
             if not img_path.exists():
+                logger.error(f"File not found: {img_path}")
                 return jsonify({
                     'success': False,
                     'error': f'File not found: {file_name}'
                 }), 404
+            
+            logger.info(f"Queuing encoding job: file={file_name}, title={title_number}, movie={movie_name}")
             
             # Queue the encoding job
             job_id = encoding_engine.queue_encoding_job(
@@ -109,6 +126,8 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 preset_name=preset_name
             )
             
+            logger.info(f"Successfully queued encoding job with ID: {job_id}")
+            
             return jsonify({
                 'success': True,
                 'job_id': job_id,
@@ -116,7 +135,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             })
             
         except Exception as e:
-            logger.error(f"Error queuing encoding job: {e}")
+            logger.error(f"Error queuing encoding job: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -192,13 +211,18 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                     job_key = f"{active_job.file_name}_{active_job.title_number}"
                     active_job_ids[job_key] = job_id
             
+            # Get queued job IDs safely
+            queued_job_ids = encoding_engine.get_queued_job_ids()
+            
             for job in jobs:
                 job_data = job.to_dict()
                 
-                # Add job_id if this is an active job
+                # Add job_id for active, queued, or other jobs
                 job_key = f"{job.file_name}_{job.title_number}"
                 if job_key in active_job_ids:
                     job_data['job_id'] = active_job_ids[job_key]
+                elif job_key in queued_job_ids:
+                    job_data['job_id'] = queued_job_ids[job_key]
                 
                 if job.status == EncodingStatus.ENCODING:
                     status_groups['encoding'].append(job_data)
