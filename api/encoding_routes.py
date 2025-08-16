@@ -185,8 +185,20 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'cancelled': []
             }
             
+            # Get active job IDs for jobs that are currently active
+            active_job_ids = {}
+            with encoding_engine._lock:
+                for job_id, active_job in encoding_engine.active_jobs.items():
+                    job_key = f"{active_job.file_name}_{active_job.title_number}"
+                    active_job_ids[job_key] = job_id
+            
             for job in jobs:
                 job_data = job.to_dict()
+                
+                # Add job_id if this is an active job
+                job_key = f"{job.file_name}_{job.title_number}"
+                if job_key in active_job_ids:
+                    job_data['job_id'] = active_job_ids[job_key]
                 
                 if job.status == EncodingStatus.ENCODING:
                     status_groups['encoding'].append(job_data)
@@ -496,9 +508,43 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Internal server error: {str(e)}'
             }), 500
     
+    @bp.route('/output-file-size', methods=['POST'])
+    def get_output_file_size() -> Union[Response, tuple]:
+        """Get the size of an output file"""
+        try:
+            data = request.get_json()
+            if not data or 'output_path' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'output_path is required'
+                }), 400
+            
+            output_path = data['output_path']
+            
+            # Check if file exists and get its size
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                return jsonify({
+                    'success': True,
+                    'file_size': file_size,
+                    'file_path': output_path
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Output file not found: {output_path}'
+                }), 404
+                
+        except Exception as e:
+            logger.error(f"Error getting output file size: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
+    
     @bp.route('/delete-file', methods=['POST'])
     def delete_encoded_file() -> Union[Response, tuple]:
-        """Delete an encoded file"""
+        """Delete an encoded file and reset its encoding status"""
         logger.info("Delete encoded file endpoint called")
         try:
             data = request.get_json()
@@ -530,37 +576,106 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                     'error': 'File path must be absolute'
                 }), 400
             
-            # Check if file exists
-            if not os.path.exists(file_path):
-                logger.warning(f"File not found: {file_path}")
-                return jsonify({
-                    'success': False,
-                    'error': 'File not found'
-                }), 404
-            
-            # Additional safety check - ensure it's a regular file
-            if not os.path.isfile(file_path):
-                logger.warning(f"Path is not a file: {file_path}")
-                return jsonify({
-                    'success': False,
-                    'error': 'Path is not a file'
-                }), 400
-            
-            # Get file info before deletion
-            file_size = os.path.getsize(file_path)
+            # Extract filename from path for metadata operations
             file_name = os.path.basename(file_path)
+            file_already_missing = False
+            file_size = 0
             
-            # Delete the file
-            os.remove(file_path)
+            # Check if file exists and get info
+            if os.path.exists(file_path):
+                # Additional safety check - ensure it's a regular file
+                if not os.path.isfile(file_path):
+                    logger.warning(f"Path is not a file: {file_path}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Path is not a file'
+                    }), 400
+                
+                # Get file info before deletion
+                file_size = os.path.getsize(file_path)
+                
+                # Delete the file
+                os.remove(file_path)
+                logger.info(f"Deleted encoded file: {file_path} ({file_size} bytes)")
+            else:
+                # File doesn't exist - that's okay, we'll still clear the job status
+                file_already_missing = True
+                logger.info(f"File already missing: {file_path} - will clear job status anyway")
             
-            logger.info(f"Deleted encoded file: {file_path} ({file_size} bytes)")
+            # Now clear the completed job status from metadata so it can be re-encoded
+            # We need to find the source file and title number from the output path
+            # This is a bit tricky since we only have the output path
+            
+            # Try to find the job in metadata by matching output paths
+            job_cleared = False
+            if metadata_manager:
+                try:
+                    # Search through all movies to find the job with this output path
+                    for movie in metadata_manager.movies:
+                        try:
+                            metadata = metadata_manager.load_metadata(movie['file_name'])
+                            jobs = ExtendedMetadata.get_encoding_jobs(metadata)
+                            
+                            # Find and remove completed jobs with matching output path
+                            updated_jobs = []
+                            for job in jobs:
+                                if (job.output_path == file_path and 
+                                    job.status == EncodingStatus.COMPLETED):
+                                    # Skip this job (remove it)
+                                    job_cleared = True
+                                    logger.info(f"Cleared completed job: {job.file_name} title {job.title_number}")
+                                else:
+                                    updated_jobs.append(job)
+                            
+                            # Update metadata if we found and removed a job
+                            if job_cleared:
+                                metadata = ExtendedMetadata.set_encoding_jobs(metadata, updated_jobs)
+                                metadata_manager.save_metadata(movie['file_name'], metadata)
+                                
+                                # Invalidate encoding engine cache
+                                if hasattr(encoding_engine, '_invalidate_jobs_cache'):
+                                    encoding_engine._invalidate_jobs_cache()
+                                
+                                break  # Found and cleared the job, no need to continue
+                                
+                        except Exception as e:
+                            logger.warning(f"Error checking jobs in {movie['file_name']}: {e}")
+                            continue
+                            
+                except Exception as e:
+                    logger.warning(f"Error clearing job status: {e}")
+            
+            # Prepare response message
+            if file_already_missing and job_cleared:
+                message = f'File was already removed and job status cleared. You can now re-encode this title.'
+            elif file_already_missing:
+                message = f'File was already removed. You can now re-encode this title.'
+            elif job_cleared:
+                message = f'Successfully deleted {file_name} and cleared job status. You can now re-encode this title.'
+            else:
+                message = f'Successfully deleted {file_name}.'
             
             return jsonify({
                 'success': True,
-                'message': f'Successfully deleted {file_name}',
+                'message': message,
                 'file_name': file_name,
-                'file_size': file_size
+                'file_size': file_size,
+                'file_already_missing': file_already_missing,
+                'job_status_cleared': job_cleared
             })
+            
+        except PermissionError:
+            logger.error(f"Permission denied deleting file: {file_path}")
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied - cannot delete file'
+            }), 403
+        except Exception as e:
+            logger.error(f"Error deleting encoded file: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Internal server error: {str(e)}'
+            }), 500
             
         except PermissionError:
             logger.error(f"Permission denied deleting file: {file_path}")

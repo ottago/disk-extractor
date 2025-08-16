@@ -753,6 +753,17 @@ class EncodingEngine:
                 job.status = EncodingStatus.COMPLETED
                 job.progress.percentage = 100.0
                 job.progress.phase = EncodingPhase.COMPLETED
+                
+                # Calculate output file size if file exists
+                if job.output_path and os.path.exists(job.output_path):
+                    try:
+                        file_size = os.path.getsize(job.output_path)
+                        # Store file size in job progress for easy access
+                        job.progress.output_size_mb = file_size / (1024 * 1024)  # Convert to MB
+                        logger.info(f"Output file size: {file_size} bytes ({job.progress.output_size_mb:.2f} MB)")
+                    except Exception as e:
+                        logger.warning(f"Could not get output file size for {job.output_path}: {e}")
+                
                 logger.info(f"Encoding job completed successfully: {job_id}")
                 
                 # Send completion notification

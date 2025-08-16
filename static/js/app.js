@@ -422,12 +422,14 @@ function createTitleElement(title) {
         return 0;
     }
     
-    // Determine if title should be collapsed by default (less than 30 minutes)
+    // Determine if title should be collapsed by default
+    // Collapse if: has movie name (sufficient content) OR (is short AND not selected)
     const durationInSeconds = parseDuration(title.duration);
     const isShortTitle = durationInSeconds > 0 && durationInSeconds < 1800; // 30 minutes = 1800 seconds
-    const shouldCollapseByDefault = isShortTitle && !title.selected;
+    const hasMovieName = title.movie_name && title.movie_name.trim();
+    const shouldCollapseByDefault = hasMovieName || (isShortTitle && !title.selected);
     
-    console.log(`Title ${title.title_number}: duration="${title.duration}", seconds=${durationInSeconds}, isShort=${isShortTitle}, selected=${title.selected}, shouldCollapse=${shouldCollapseByDefault}`);
+    console.log(`Title ${title.title_number}: duration="${title.duration}", seconds=${durationInSeconds}, isShort=${isShortTitle}, hasMovieName=${hasMovieName}, selected=${title.selected}, shouldCollapse=${shouldCollapseByDefault}`);
     
     // Helper function to create title summary
     function createTitleSummary() {
@@ -466,11 +468,12 @@ function createTitleElement(title) {
                 <input type="checkbox" 
                        id="title-${title.title_number}-selected"
                        ${title.selected ? 'checked' : ''}
-                       onclick="event.stopPropagation(); saveMetadata();">
+                       onclick="event.stopPropagation(); updateQueueButtonsIfNeeded(); saveMetadata();">
             </div>
             
             <div class="title-basic-info">
                 <span class="title-number">Title ${title.title_number}</span>
+                <span class="completion-icon" id="completion-icon-${title.title_number}" style="display: none;">✅</span>
                 <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${safeSuggestedText}</span>
             </div>
             
@@ -497,7 +500,9 @@ function createTitleElement(title) {
                 <input type="text" 
                        id="title-${title.title_number}-name" 
                        value="${safeMovieName}"
-                       onchange="saveMetadata(); updateTitleSummary(${title.title_number});">
+                       oninput="updateQueueButtonsIfNeeded();"
+                       onchange="saveMetadata(); updateTitleSummary(${title.title_number});"
+                       onblur="saveMetadata();">
             </div>
             
             <div class="form-group">
@@ -731,6 +736,21 @@ function updateFileListStatus() {
     }
 }
 
+// Update queue buttons without saving metadata (for real-time updates)
+function updateQueueButtonsIfNeeded() {
+    // Update queue management buttons since title selection or movie names may have changed
+    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
+        window.EncodingUI.updateQueueManagementButtons();
+    } else {
+        // Try again after a short delay if EncodingUI isn't ready
+        setTimeout(() => {
+            if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
+                window.EncodingUI.updateQueueManagementButtons();
+            }
+        }, 100);
+    }
+}
+
 // Save metadata
 function saveMetadata() {
     if (!selectedFile || !enhancedMetadata) return;
@@ -809,6 +829,11 @@ function saveMetadata() {
     .catch(error => {
         console.error('Error saving metadata:', error);
     });
+    
+    // Update queue management buttons since title selection or movie names may have changed
+    if (window.EncodingUI && window.EncodingUI.updateQueueManagementButtons) {
+        window.EncodingUI.updateQueueManagementButtons();
+    }
 }
 
 // Show raw output modal
@@ -1486,6 +1511,7 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
     if (!selectedFile) return;
     
     const statusSection = document.getElementById(`encoding-status-${titleNumber}`);
+    const completionIcon = document.getElementById(`completion-icon-${titleNumber}`);
     if (!statusSection) return;
     
     // Find jobs for this file and title
@@ -1504,6 +1530,7 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
     
     if (relevantJobs.length === 0) {
         statusSection.innerHTML = '';
+        if (completionIcon) completionIcon.style.display = 'none';
         return;
     }
     
@@ -1513,6 +1540,7 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
     
     switch (job.category) {
         case 'encoding':
+            if (completionIcon) completionIcon.style.display = 'none';
             statusHTML = `
                 <div class="encoding-status encoding">
                     <span class="status-icon">🔄</span>
@@ -1525,6 +1553,7 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
             break;
             
         case 'queued':
+            if (completionIcon) completionIcon.style.display = 'none';
             statusHTML = `
                 <div class="encoding-status queued">
                     <span class="status-icon">⏳</span>
@@ -1534,16 +1563,53 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
             break;
             
         case 'completed':
+            // Show completion icon in title header
+            if (completionIcon) completionIcon.style.display = 'inline';
+            
+            // Get file info for the completed encoding - use correct property names
+            const outputFileName = job.output_filename || `${job.movie_name || 'output'}.mp4`;
+            const outputPath = job.output_path || '';
+            
+            // Try to get file size from job progress data first, then from server if needed
+            let fileSizeInfo = 'Unknown size';
+            if (job.progress && job.progress.output_size_mb) {
+                // File size is stored in MB in progress data
+                fileSizeInfo = formatFileSize(job.progress.output_size_mb * 1024 * 1024);
+            } else if (outputPath) {
+                // File size not in job data, we'll need to get it from the server
+                fileSizeInfo = 'Calculating...';
+                // Request file size asynchronously
+                getOutputFileSize(outputPath).then(size => {
+                    if (size) {
+                        const sizeElement = document.querySelector(`#encoding-status-${titleNumber} .file-size-info`);
+                        if (sizeElement) {
+                            sizeElement.textContent = formatFileSize(size);
+                        }
+                    }
+                });
+            }
+            
             statusHTML = `
                 <div class="encoding-status completed">
                     <span class="status-icon">✅</span>
                     <span class="status-text">Encoding completed</span>
                     <span class="completion-time">${formatRelativeTime(job.completed_at)}</span>
+                    <div class="completion-details">
+                        <div class="output-file-info">
+                            <strong>Output:</strong> ${escapeHtml(outputFileName)} (<span class="file-size-info">${fileSizeInfo}</span>)
+                        </div>
+                        <div class="completion-actions">
+                            <button class="completion-btn delete-output-btn" onclick="deleteEncodedFile('${escapeHtml(selectedFile)}', ${titleNumber}, '${escapeHtml(outputFileName)}', '${escapeHtml(outputPath)}')">
+                                🗑️ Delete Output
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
             break;
             
         case 'failed':
+            if (completionIcon) completionIcon.style.display = 'none';
             statusHTML = `
                 <div class="encoding-status failed">
                     <span class="status-icon">❌</span>
@@ -1564,6 +1630,81 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
     }
     
     statusSection.innerHTML = statusHTML;
+}
+
+// Get output file size from server
+async function getOutputFileSize(outputPath) {
+    try {
+        const response = await fetch('/api/encoding/output-file-size', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                output_path: outputPath
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.file_size) {
+            return data.file_size;
+        } else {
+            console.warn('Could not get output file size:', data.error);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error getting output file size:', error);
+        return null;
+    }
+}
+
+// Format file size in human readable format
+function formatFileSize(bytes) {
+    if (!bytes) return 'Unknown size';
+    
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+    
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+}
+
+// Delete encoded file and reset status
+async function deleteEncodedFile(fileName, titleNumber, outputFileName, outputPath) {
+    const confirmed = confirm(`Are you sure you want to delete the encoded file "${outputFileName}"?\n\nThis will also reset the encoding status so you can re-encode this title.`);
+    
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch('/api/encoding/delete-file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                file_path: outputPath || `${outputFileName}` // Use full path if available, fallback to filename
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Backend now handles both file deletion and job status clearing
+            showAlert(data.message || 'Encoded file deleted successfully. You can now re-encode this title.', 'success');
+            // Refresh the encoding status
+            checkEncodingStatusForAllTitles();
+        } else {
+            showAlert('Error deleting file: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showAlert('Error deleting file: ' + error.message, 'error');
+    }
 }
 
 // View failure logs for a specific title

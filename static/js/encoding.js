@@ -606,11 +606,25 @@
         // Find and cancel active encoding jobs for this file
         if (encodingStatus.jobs && encodingStatus.jobs.encoding) {
             const activeJobs = encodingStatus.jobs.encoding.filter(job => job.file_name === fileName);
+            console.log(`Found ${activeJobs.length} active encoding jobs for ${fileName}`);
             
             activeJobs.forEach(job => {
-                const jobId = `${job.file_name}_${job.title_number}`;
-                cancelEncodingJob(jobId);
+                if (job.job_id) {
+                    console.log(`Cancelling encoding job: ${job.job_id}`);
+                    cancelEncodingJob(job.job_id);
+                } else {
+                    console.error(`No job_id found for ${fileName} title ${job.title_number}`);
+                    showAlert(`Could not find job ID for cancellation. Please try refreshing the page.`, 'error');
+                }
             });
+            
+            if (activeJobs.length === 0) {
+                console.log(`No active encoding jobs found for ${fileName}`);
+                showAlert(`No active encoding jobs found for this file.`, 'warning');
+            }
+        } else {
+            console.log(`No encoding jobs in status or no encoding jobs at all`);
+            showAlert(`No encoding jobs found.`, 'warning');
         }
     }
     
@@ -701,6 +715,14 @@
             addButton.className = 'queue-button add-to-queue';
             addButton.textContent = 'Add to Queue';
             addButton.onclick = () => addToQueue(selectedFile);
+            
+            // Check if button should be enabled (has valid selected titles)
+            const hasValidTitles = checkForValidSelectedTitles();
+            addButton.disabled = !hasValidTitles;
+            if (!hasValidTitles) {
+                addButton.title = 'Select titles with movie names to enable';
+            }
+            
             queueActions.appendChild(addButton);
         } else if (status === 'queued') {
             const removeButton = document.createElement('button');
@@ -715,6 +737,24 @@
             cancelButton.onclick = () => cancelEncoding(selectedFile);
             queueActions.appendChild(cancelButton);
         }
+    }
+    
+    // Check if there are valid selected titles (selected + has movie name)
+    function checkForValidSelectedTitles() {
+        // Check the current DOM state for selected titles with movie names
+        const titleSections = document.querySelectorAll('.title-section');
+        
+        for (const titleSection of titleSections) {
+            const titleNumber = titleSection.dataset.titleNumber;
+            const checkbox = document.getElementById(`title-${titleNumber}-selected`);
+            const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
+            
+            if (checkbox && checkbox.checked && movieNameInput && movieNameInput.value.trim()) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     // Utility functions
@@ -784,6 +824,7 @@
         handleEncodingStatusChange: handleEncodingStatusChange,
         updateFileListWithEncodingStatus: updateFileListWithEncodingStatus,
         updateQueueManagementButtons: updateQueueManagementButtons,
+        checkForValidSelectedTitles: checkForValidSelectedTitles,
         setSelectedFile: function(fileName) {
             selectedFile = fileName;
             updateQueueManagementButtons();
