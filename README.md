@@ -25,6 +25,8 @@ A web-based application for managing movie metadata stored alongside .img movie 
 
 2. **Start the application:**
    ```bash
+   # You may require this library to build the image.
+   sudo apt install python3-setuptools
    docker-compose up -d
    ```
 
