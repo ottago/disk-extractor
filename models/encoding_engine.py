@@ -84,6 +84,9 @@ class EncodingEngine:
                 thread_name_prefix="encoding"
             )
             
+            # Recover jobs from previous session before starting queue processing
+            self._recover_jobs_from_metadata()
+            
             # Start queue processing thread
             self.queue_thread = threading.Thread(
                 target=self._process_queue,
@@ -1156,6 +1159,90 @@ class EncodingEngine:
                 )
         except Exception as e:
             logger.error(f"Error checking queue empty notification: {e}")
+    
+    def _recover_jobs_from_metadata(self) -> None:
+        """
+        Recover jobs from metadata files on startup.
+        
+        This method scans all metadata files and:
+        1. Moves any ENCODING jobs back to QUEUED (they were interrupted)
+        2. Re-queues any existing QUEUED jobs
+        3. Preserves COMPLETED, FAILED, and CANCELLED jobs as-is
+        """
+        if not self.metadata_manager:
+            logger.warning("No metadata manager available for job recovery")
+            return
+        
+        recovered_count = 0
+        requeued_count = 0
+        
+        try:
+            logger.info("Starting job recovery from metadata files...")
+            
+            # Scan all movie files for jobs
+            for movie in self.metadata_manager.movies:
+                try:
+                    metadata = self.metadata_manager.load_metadata(movie['file_name'])
+                    jobs = ExtendedMetadata.get_encoding_jobs(metadata)
+                    
+                    if not jobs:
+                        continue
+                    
+                    jobs_modified = False
+                    
+                    for job in jobs:
+                        if job.status == EncodingStatus.ENCODING:
+                            # Job was interrupted during encoding - move back to queued
+                            logger.info(f"Recovering interrupted job: {job.file_name} title {job.title_number}")
+                            job.status = EncodingStatus.QUEUED
+                            job.started_at = None  # Clear start time
+                            job.progress = EncodingProgress()  # Reset progress
+                            job.error_message = None  # Clear any error
+                            
+                            # Generate new job ID for recovery
+                            job_id = f"{job.file_name}_{job.title_number}_{uuid.uuid4().hex[:8]}"
+                            
+                            # Add to queue for processing
+                            self.encoding_queue.put((job_id, job))
+                            self.queued_jobs[job_id] = job
+                            
+                            recovered_count += 1
+                            jobs_modified = True
+                            
+                        elif job.status == EncodingStatus.QUEUED:
+                            # Job was already queued - re-queue it
+                            logger.info(f"Re-queuing job: {job.file_name} title {job.title_number}")
+                            
+                            # Generate new job ID for re-queuing
+                            job_id = f"{job.file_name}_{job.title_number}_{uuid.uuid4().hex[:8]}"
+                            
+                            # Add to queue for processing
+                            self.encoding_queue.put((job_id, job))
+                            self.queued_jobs[job_id] = job
+                            
+                            requeued_count += 1
+                    
+                    # Save metadata if we modified any jobs
+                    if jobs_modified:
+                        metadata = ExtendedMetadata.set_encoding_jobs(metadata, jobs)
+                        self.metadata_manager.save_metadata(movie['file_name'], metadata)
+                        
+                except Exception as e:
+                    logger.error(f"Error recovering jobs from {movie['file_name']}: {e}")
+            
+            # Log recovery results
+            total_recovered = recovered_count + requeued_count
+            if total_recovered > 0:
+                logger.info(f"Job recovery completed: {recovered_count} interrupted jobs recovered, "
+                           f"{requeued_count} queued jobs restored, {total_recovered} total jobs in queue")
+                
+                # Invalidate cache since we modified job states
+                self._invalidate_jobs_cache()
+            else:
+                logger.info("Job recovery completed: No jobs to recover")
+                
+        except Exception as e:
+            logger.error(f"Error during job recovery: {e}")
     
     def get_template_manager(self) -> TemplateManager:
         """Get the template manager instance"""

@@ -268,7 +268,7 @@ class EncodingSettings:
     output_directory: str = ""
     default_preset: str = "Fast 1080p30"
     auto_queue_new_files: bool = False
-    progress_update_interval: int = 1  # seconds
+    progress_update_interval: int = 3  # seconds
     notification_settings: Dict[str, bool] = None
     stats_for_nerds: bool = False  # Show detailed system stats
     
