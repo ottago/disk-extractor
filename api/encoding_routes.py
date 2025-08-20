@@ -165,7 +165,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Internal server error: {str(e)}'
             }), 500
     
-    @bp.route('/cancel/<job_id>', methods=['POST'])
+    @bp.route('/cancel/<path:job_id>', methods=['POST'])
     def cancel_encoding(job_id: str) -> Union[Response, tuple]:
         """Cancel an active encoding job"""
         try:

@@ -205,7 +205,8 @@ class EncodingEngine:
             output_filename=output_filename,
             preset_name=preset_name,
             status=EncodingStatus.QUEUED,
-            queue_position=self.encoding_queue.qsize() + 1
+            queue_position=self.encoding_queue.qsize() + 1,
+            job_id=job_id  # Set the job ID on the job object
         )
         
         # Add to queue
@@ -347,7 +348,7 @@ class EncodingEngine:
             logger.debug("Jobs cache manually invalidated")
     
     def get_all_jobs(self) -> List[EncodingJob]:
-        """Get all jobs (active and from metadata) with caching"""
+        """Get all jobs (active, queued, and from metadata) with caching"""
         current_time = time.time()
         
         # Check if we have a valid cache
@@ -361,21 +362,27 @@ class EncodingEngine:
         logger.debug("Rebuilding jobs cache")
         jobs = []
         
-        # Add active jobs
+        # Add active and queued jobs (in-memory state)
         with self._lock:
             jobs.extend(self.active_jobs.values())
+            jobs.extend(self.queued_jobs.values())
         
-        # Add jobs from metadata
+        # Add jobs from metadata (completed, failed, etc.)
         if self.metadata_manager:
             for movie in self.metadata_manager.movies:
                 try:
                     metadata = self.metadata_manager.load_metadata(movie['file_name'])
                     metadata_jobs = ExtendedMetadata.get_encoding_jobs(metadata)
                     
-                    # Only add jobs not already in active jobs
+                    # Only add jobs not already in active or queued jobs
                     for job in metadata_jobs:
                         job_key = f"{job.file_name}_{job.title_number}"
-                        if not any(job_key in active_id for active_id in self.active_jobs.keys()):
+                        # Check if this job is already in our in-memory collections
+                        already_included = (
+                            any(job_key in active_id for active_id in self.active_jobs.keys()) or
+                            any(job_key in queued_id for queued_id in self.queued_jobs.keys())
+                        )
+                        if not already_included:
                             jobs.append(job)
                 except Exception as e:
                     logger.error(f"Error loading jobs from {movie['file_name']}: {e}")
@@ -384,7 +391,7 @@ class EncodingEngine:
         with self._jobs_cache_lock:
             self._jobs_cache = jobs.copy()
             self._jobs_cache_timestamp = current_time
-            logger.debug(f"Cached {len(jobs)} jobs")
+            logger.debug(f"Cached {len(jobs)} jobs (active: {len(self.active_jobs)}, queued: {len(self.queued_jobs)})")
         
         return jobs
     
@@ -1201,6 +1208,7 @@ class EncodingEngine:
                             
                             # Generate new job ID for recovery
                             job_id = f"{job.file_name}_{job.title_number}_{uuid.uuid4().hex[:8]}"
+                            job.job_id = job_id  # Set the job_id field on the job object
                             
                             # Add to queue for processing
                             self.encoding_queue.put((job_id, job))
@@ -1215,6 +1223,7 @@ class EncodingEngine:
                             
                             # Generate new job ID for re-queuing
                             job_id = f"{job.file_name}_{job.title_number}_{uuid.uuid4().hex[:8]}"
+                            job.job_id = job_id  # Set the job_id field on the job object
                             
                             # Add to queue for processing
                             self.encoding_queue.put((job_id, job))

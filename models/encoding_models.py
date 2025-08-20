@@ -67,6 +67,7 @@ class EncodingJob:
     preset_name: str
     status: EncodingStatus = EncodingStatus.NOT_QUEUED
     queue_position: int = 0
+    job_id: str = ""  # Backend-generated job ID for tracking
     created_at: str = ""
     started_at: str = ""
     completed_at: str = ""

@@ -510,7 +510,7 @@
             }
             
             const fileList = document.getElementById('fileList');
-            const currentSelection = document.querySelector('.file-item.selected')?.dataset.filename;
+            const currentSelection = document.querySelector('.file-item.active')?.dataset.filename;
             
             // Clear and rebuild list
             fileList.innerHTML = '';
@@ -523,7 +523,7 @@
                 
                 // Restore selection if needed
                 if (movie.file_name === currentSelection) {
-                    li.classList.add('selected');
+                    li.classList.add('active');
                 }
                 
                 fileList.appendChild(li);
@@ -571,14 +571,14 @@
                 // Update the file list item using centralized formatting
                 const fileItem = document.querySelector(`[data-filename="${CSS.escape(movieData.file_name)}"]`);
                 if (fileItem) {
-                    const wasSelected = fileItem.classList.contains('selected');
+                    const wasSelected = fileItem.classList.contains('active');
                     
                     // Re-populate the item with centralized formatting
                     populateFileListItem(fileItem, movieData);
                     
                     // Restore selection if needed
                     if (wasSelected) {
-                        fileItem.classList.add('selected');
+                        fileItem.classList.add('active');
                     }
                 }
                 

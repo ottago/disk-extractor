@@ -851,7 +851,15 @@ function saveMetadata() {
     })
     .then(response => response.json())
     .then(data => {
-        if (!data.success) {
+        if (data.success) {
+            // Update the file list item to reflect metadata changes
+            updateFileListStatus();
+            
+            // Trigger a refresh of the current movie metadata to update file list
+            if (window.refreshCurrentMovieMetadata) {
+                window.refreshCurrentMovieMetadata();
+            }
+        } else {
             console.error('Failed to save metadata:', data.error);
         }
     })
