@@ -27,6 +27,13 @@
     
     <div class="container">
         <div class="sidebar">
+            <!-- Pinned Encoding Section -->
+            <div id="encodingSection" class="encoding-section" style="display: none;">
+                <div class="encoding-section-header">
+                    <h4>🎬 Currently Encoding</h4>
+                </div>
+            </div>
+            
             <div class="sidebar-content">
                 <ul class="file-list" id="fileList">
                     {% for movie in movies %}
@@ -67,7 +74,6 @@
                         <div class="action-buttons">
                             <button type="button" id="scanButton" onclick="scanFile()" class="action-button scan-button">🔍 Scan Media</button>
                             <button type="button" id="rawOutputButton" onclick="showRawOutput()" class="action-button raw-output-button" style="display: none;">📄 Raw Output</button>
-                            <button type="button" id="addToQueueButton" onclick="addSelectedTitlesToQueue()" class="action-button add-to-queue-button" style="display: none;">➕ Add to Queue</button>
                         </div>
                     </div>
                 </div>
