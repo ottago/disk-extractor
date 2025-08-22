@@ -473,11 +473,11 @@ class MovieMetadataManager:
             
             # Suggest titles longer than configured minimum (skip trailers/extras)
             suggested = total_minutes >= Config.MIN_TITLE_DURATION_MINUTES
-            
+
             suggestions.append({
                 'title_index': title.get('Index', 0),
                 'suggested': suggested,
-                'reason': 'Main content' if suggested else 'Too short (likely trailer/extra)'
+                'reason': 'Main content' if suggested else ''
             })
         
         return suggestions

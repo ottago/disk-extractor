@@ -394,8 +394,6 @@ function createTitleElement(title) {
     titleDiv.dataset.titleNumber = title.title_number;
     titleDiv.dataset.duration = title.duration || '';
     
-    const suggested = title.suggestions.title.suggested ? 'suggested' : 'not-suggested';
-    const suggestedText = title.suggestions.title.reason || 'Unknown';
     
     // Helper function to get year from release date
     function getYear(dateString) {
@@ -474,10 +472,10 @@ function createTitleElement(title) {
     const safeSynopsis = escapeHtml(title.synopsis || '');
     const safeYear = escapeHtml(getYear(title.release_date));
     const safeDuration = escapeHtml(title.duration || '');
-    const safeSuggestedText = escapeHtml(suggestedText);
+    const titleSuggested = title.suggestions.title.suggested ? 'suggested' : 'not-suggested';
     
     titleDiv.innerHTML = `
-        <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''}" onclick="toggleTitle(${title.title_number})">
+        <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''} ${titleSuggested}" onclick="toggleTitle(${title.title_number})">
             <div class="title-checkbox">
                 <input type="checkbox" 
                        id="title-${title.title_number}-selected"
@@ -489,7 +487,6 @@ function createTitleElement(title) {
                 <span class="title-number">Title ${title.title_number}</span>
                 <span class="completion-icon" id="completion-icon-${title.title_number}" style="display: none;">✅</span>
                 <span class="cancel-encoding-icon" id="cancel-encoding-${title.title_number}" style="display: none;" onclick="event.stopPropagation(); cancelTitleEncoding(${title.title_number});" title="Cancel encoding">❌</span>
-                <span class="content-suggestion ${suggested}" style="display: ${shouldCollapseByDefault && title.movie_name ? 'none' : 'inline-block'};">${safeSuggestedText}</span>
             </div>
             
             <div class="movie-name-box" style="display: ${shouldCollapseByDefault && title.movie_name ? 'block' : 'none'};">
@@ -511,7 +508,7 @@ function createTitleElement(title) {
         
         <div class="title-content ${shouldCollapseByDefault ? 'collapsed' : ''}" id="title-${title.title_number}-content" style="display: ${shouldCollapseByDefault ? 'none' : 'block'};">
             <div class="form-group">
-                <label for="title-${title.title_number}-name">Movie Name:</label>
+                <label for="title-${title.title_number}-name">Name:</label>
                 <input type="text" 
                        id="title-${title.title_number}-name" 
                        value="${safeMovieName}"
@@ -589,11 +586,6 @@ function createTitleElement(title) {
                         }).join('')}
                     </div>
                 </div>
-            </div>
-            
-            <!-- Encoding Status Section -->
-            <div class="encoding-status-section" id="encoding-status-${title.title_number}">
-                <!-- This will be populated by checkEncodingStatus() -->
             </div>
         </div>
     `;
@@ -703,12 +695,6 @@ function updateTitleSummary(titleNumber) {
     if (movieNameBox) {
         movieNameBox.textContent = movieName; // textContent automatically escapes
         movieNameBox.style.display = movieName ? 'block' : 'none';
-        
-        // Show/hide content suggestion based on movie name
-        const suggestion = titleSection.querySelector('.content-suggestion');
-        if (suggestion) {
-            suggestion.style.display = movieName ? 'none' : 'inline-block';
-        }
     }
     
     // Update collapsed summary if in collapsed state

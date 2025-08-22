@@ -141,10 +141,6 @@
                 infoText = `${movie.size_mb} MB`;
             }
             
-            if (movie.has_metadata) {
-                infoText += infoText ? ' • Has metadata' : 'Has metadata';
-            }
-            
             if (encodingStatus && encodingStatus !== 'not_queued') {
                 const statusMap = {
                     'queued': 'Queued',

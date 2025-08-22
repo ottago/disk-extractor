@@ -188,7 +188,7 @@ body {
 }
 
 .file-item {
-    padding: 0.5rem;
+    padding: 0.2rem;
     border-bottom: 1px solid #eee;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -412,12 +412,11 @@ body {
 .title-section {
     border: 1px solid #e0e0e0;
     border-radius: 8px;
-    margin-bottom: 1rem;
+    margin-bottom: 0.6rem;
     background: white;
 }
 
 .title-header {
-    padding: 0.4rem;
     padding-left: 0.8rem;
     padding-right: 0.8rem;
     cursor: pointer;
@@ -437,6 +436,14 @@ body {
 .title-header.collapsed {
     border-bottom: none;
     border-radius: 8px;
+}
+
+.title-header.suggested {
+    background: #f8fff8;
+}
+
+.title-header.suggested:hover {
+    background: #f0fff0;
 }
 
 .title-checkbox {
@@ -473,10 +480,10 @@ body {
 }
 
 .movie-name-box {
-    background: #e3f2fd;
+    # NKW background: #e3f2fd;
     color: #1976d2;
     padding: 0.25rem 0.75rem;
-    border-radius: 16px;
+    # NKW border-radius: 16px;
     font-size: 0.875rem;
     font-weight: 500;
     overflow: hidden;
@@ -1073,13 +1080,6 @@ body {
         transform: translateX(0);
         opacity: 1;
     }
-}
-
-/* Encoding Status Section */
-.encoding-status-section {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e9ecef;
 }
 
 .encoding-status {
