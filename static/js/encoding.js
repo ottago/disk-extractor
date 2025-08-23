@@ -99,6 +99,11 @@
         updateFileListWithEncodingStatus();
         updateAddToQueueButton();
         updateTitleEncodingStatusDisplay();
+        
+        // Update title status icons if the function is available
+        if (window.updateAllTitleStatusIcons) {
+            window.updateAllTitleStatusIcons();
+        }
     }
     
     // Handle individual job progress updates
@@ -154,6 +159,11 @@
         updateFileListWithEncodingStatus();
         updateAddToQueueButton();
         updateTitleEncodingStatusDisplay();
+        
+        // Update title status icons if the function is available
+        if (window.updateAllTitleStatusIcons) {
+            window.updateAllTitleStatusIcons();
+        }
     }
     
     // Request encoding status from server
@@ -384,44 +394,59 @@
         addButton.disabled = !hasValidSelections;
     }
     
-    // Check for valid selected titles
+    // Check for valid selected titles (updated for icon system)
     function checkForValidSelectedTitles() {
         if (!selectedFile) return false;
         
-        const titleCheckboxes = document.querySelectorAll(`input[name="titles"]:checked`);
+        // Since we removed the checkbox system, check if there are any titles
+        // that are not already queued/encoding and have required data
+        const titleSections = document.querySelectorAll('.title-section');
         
-        // Check if any selected titles are not already queued/encoding
-        for (const checkbox of titleCheckboxes) {
-            const titleNumber = parseInt(checkbox.value);
-            const status = getJobStatus(selectedFile, titleNumber);
+        for (const section of titleSections) {
+            const titleNumber = parseInt(section.dataset.titleNumber);
+            if (isNaN(titleNumber)) continue;
             
-            if (status === 'not_queued' || status === 'failed') {
-                return true; // At least one valid title
+            const status = getJobStatus(selectedFile, titleNumber);
+            const movieName = document.getElementById(`title-${titleNumber}-name`)?.value || '';
+            const audioCheckboxes = document.querySelectorAll(`input[id^="audio-${titleNumber}-"]:checked`);
+            
+            // Check if this title can be queued
+            if ((status === 'not_queued' || status === 'failed') && 
+                movieName.trim() && audioCheckboxes.length > 0) {
+                return true;
             }
         }
         
         return false;
     }
     
-    // Add selected titles to queue
+    // Add selected titles to queue (updated for icon system)
     function addSelectedTitlesToQueue() {
         if (!selectedFile) return;
         
-        const titleCheckboxes = document.querySelectorAll(`input[name="titles"]:checked`);
         const movieNameElement = document.querySelector(`[data-filename="${selectedFile}"] .movie-name`);
         const movieName = movieNameElement ? movieNameElement.textContent : selectedFile;
         
         let addedCount = 0;
         let errorCount = 0;
         
-        titleCheckboxes.forEach(checkbox => {
-            const titleNumber = parseInt(checkbox.value);
-            const status = getJobStatus(selectedFile, titleNumber);
+        // Process all title sections instead of checkboxes
+        const titleSections = document.querySelectorAll('.title-section');
+        
+        titleSections.forEach(section => {
+            const titleNumber = parseInt(section.dataset.titleNumber);
+            if (isNaN(titleNumber)) return;
             
-            if (status === 'not_queued' || status === 'failed') {
-                queueEncodingJob(selectedFile, titleNumber, movieName);
+            const status = getJobStatus(selectedFile, titleNumber);
+            const titleMovieName = document.getElementById(`title-${titleNumber}-name`)?.value || '';
+            const audioCheckboxes = document.querySelectorAll(`input[id^="audio-${titleNumber}-"]:checked`);
+            
+            // Only queue titles that have required data and are not already queued
+            if ((status === 'not_queued' || status === 'failed') && 
+                titleMovieName.trim() && audioCheckboxes.length > 0) {
+                queueEncodingJob(selectedFile, titleNumber, titleMovieName);
                 addedCount++;
-            } else {
+            } else if (status !== 'not_queued' && status !== 'failed') {
                 console.log(`Skipping title ${titleNumber}: already ${status}`);
                 errorCount++;
             }
@@ -493,6 +518,78 @@
         }
     }
     
+    // Queue a single title for encoding
+    function queueSingleTitle(fileName, titleNumber) {
+        console.log(`Queuing single title: ${fileName} - Title ${titleNumber}`);
+        
+        // Check if already queued or encoding
+        const status = getJobStatus(fileName, titleNumber);
+        if (status !== 'not_queued' && status !== 'failed') {
+            showAlert(`Title ${titleNumber} is already ${status}`, 'warning');
+            return;
+        }
+        
+        // Get movie name for the title
+        const movieNameInput = document.getElementById(`title-${titleNumber}-name`);
+        const movieName = movieNameInput ? movieNameInput.value.trim() : '';
+        
+        if (!movieName) {
+            showAlert('Please enter a movie name before queuing', 'error');
+            return;
+        }
+        
+        // Queue the job
+        queueEncodingJob(fileName, titleNumber, movieName);
+        showAlert(`Title ${titleNumber} queued for encoding`, 'success');
+    }
+    
+    // Retry a failed title
+    function retrySingleTitle(fileName, titleNumber) {
+        console.log(`Retrying failed title: ${fileName} - Title ${titleNumber}`);
+        
+        // Remove from failed state and re-queue
+        const failedJobIndex = jobsState.failed.findIndex(job => 
+            job.file_name === fileName && job.title_number === titleNumber
+        );
+        
+        if (failedJobIndex !== -1) {
+            jobsState.failed.splice(failedJobIndex, 1);
+        }
+        
+        // Queue the title again
+        queueSingleTitle(fileName, titleNumber);
+    }
+    
+    // Remove a single title from queue
+    function removeFromQueueSingle(fileName, titleNumber) {
+        console.log(`Removing from queue: ${fileName} - Title ${titleNumber}`);
+        
+        // Find and remove from queued jobs
+        const queuedJobIndex = jobsState.queued.findIndex(job => 
+            job.file_name === fileName && job.title_number === titleNumber
+        );
+        
+        if (queuedJobIndex !== -1) {
+            const job = jobsState.queued[queuedJobIndex];
+            jobsState.queued.splice(queuedJobIndex, 1);
+            
+            // Emit cancel event to backend
+            if (window.socket) {
+                window.socket.emit('cancel_encoding', { job_id: job.job_id });
+            }
+            
+            showAlert(`Title ${titleNumber} removed from queue`, 'success');
+            
+            // Update UI
+            updateTitleEncodingStatusDisplay();
+            if (window.updateAllTitleStatusIcons) {
+                window.updateAllTitleStatusIcons();
+            }
+        } else {
+            showAlert(`Title ${titleNumber} not found in queue`, 'warning');
+        }
+    }
+    
     // Export public interface
     window.EncodingUI = {
         initialize: initializeEncodingUI,
@@ -506,6 +603,9 @@
         cancelTitleEncoding: cancelTitleEncoding,
         getFileEncodingStatus: getFileEncodingStatus,
         getJobStatus: getJobStatus,
+        queueTitle: queueSingleTitle,
+        retryTitle: retrySingleTitle,
+        removeFromQueue: removeFromQueueSingle,
         setSelectedFile: function(fileName) {
             selectedFile = fileName;
             updateAddToQueueButton();

@@ -450,6 +450,99 @@ body {
     flex-shrink: 0;
 }
 
+/* Title Status Icon Styles */
+.title-status-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.title-status-icon:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.1);
+}
+
+.title-status-icon .status-icon {
+    font-size: 16px;
+    transition: all 0.2s ease;
+}
+
+/* Status-specific styling */
+.title-status-icon.status-completed {
+    color: #28a745;
+}
+
+.title-status-icon.status-completed:hover {
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.title-status-icon.status-failed {
+    color: #dc3545;
+}
+
+.title-status-icon.status-failed:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.title-status-icon.status-queued {
+    color: #ffc107;
+}
+
+.title-status-icon.status-queued:hover {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.title-status-icon.status-encoding {
+    color: #007bff;
+    animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+.title-status-icon.status-encoding:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.title-status-icon.status-not-queued {
+    color: #6c757d;
+}
+
+.title-status-icon.status-not-queued:hover {
+    background-color: rgba(108, 117, 125, 0.1);
+    color: #495057;
+}
+
+/* Pulsing animation for encoding status */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+/* Rotating animation alternative for encoding status */
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.title-status-icon.status-encoding .status-icon {
+    animation: rotate 2s linear infinite;
+}
+
 .title-basic-info {
     display: flex;
     align-items: center;

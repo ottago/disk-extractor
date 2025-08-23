@@ -385,6 +385,11 @@ function displayEnhancedMetadata() {
     setTimeout(() => {
         checkEncodingStatusForAllTitles();
     }, 100);
+    
+    // Update title status icons after titles are created
+    setTimeout(() => {
+        updateAllTitleStatusIcons();
+    }, 150);
 }
 
 // Create title element
@@ -476,11 +481,12 @@ function createTitleElement(title) {
     
     titleDiv.innerHTML = `
         <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''} ${titleSuggested}" onclick="toggleTitle(${title.title_number})">
-            <div class="title-checkbox">
-                <input type="checkbox" 
-                       id="title-${title.title_number}-selected"
-                       ${title.selected ? 'checked' : ''}
-                       onclick="event.stopPropagation(); updateQueueButtonsIfNeeded(); saveMetadata();">
+            <div class="title-status-icon" id="title-status-${title.title_number}" 
+                 onclick="event.stopPropagation(); handleTitleStatusClick(${title.title_number});"
+                 onmouseover="handleTitleStatusHover(${title.title_number}, true)"
+                 onmouseout="handleTitleStatusHover(${title.title_number}, false)"
+                 title="Click to queue for encoding">
+                <span class="status-icon">➕</span>
             </div>
             
             <div class="title-basic-info">
@@ -751,7 +757,7 @@ function cancelTitleEncoding(titleNumber) {
     }
 }
 
-// Update queue buttons without saving metadata (for real-time updates)
+// Update queue buttons and icons without saving metadata (for real-time updates)
 function updateQueueButtonsIfNeeded() {
     // Update Add to Queue button since title selection or movie names may have changed
     if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
@@ -764,28 +770,21 @@ function updateQueueButtonsIfNeeded() {
             }
         }, 100);
     }
+    
+    // Also update title status icons since movie names may have changed
+    // (icons might need to reflect whether titles are ready to queue)
+    if (window.updateAllTitleStatusIcons) {
+        window.updateAllTitleStatusIcons();
+    }
 }
 
 // Save metadata
 function saveMetadata() {
     if (!selectedFile || !enhancedMetadata) return;
     
-    // Collect all title data
+    // Collect all title data (no longer using "selected" concept)
     const titles = enhancedMetadata.titles.map(title => {
         const titleNumber = title.title_number;
-        const selected = document.getElementById(`title-${titleNumber}-selected`).checked;
-        
-        if (!selected) {
-            return {
-                title_number: titleNumber,
-                selected: false,
-                movie_name: '',
-                release_date: '',
-                synopsis: '',
-                selected_audio_tracks: [],
-                selected_subtitle_tracks: []
-            };
-        }
         
         // Get selected audio tracks
         const selectedAudioTracks = [];
@@ -806,15 +805,19 @@ function saveMetadata() {
         });
         
         // Convert year to full date format (YYYY-01-01)
-        const yearValue = document.getElementById(`title-${titleNumber}-date`).value;
+        const yearValue = document.getElementById(`title-${titleNumber}-date`)?.value || '';
         const releaseDate = yearValue && yearValue.length === 4 ? `${yearValue}-01-01` : '';
+        
+        // Get form values with null checks
+        const movieNameElement = document.getElementById(`title-${titleNumber}-name`);
+        const synopsisElement = document.getElementById(`title-${titleNumber}-synopsis`);
         
         return {
             title_number: titleNumber,
-            selected: true,
-            movie_name: document.getElementById(`title-${titleNumber}-name`).value,
+            selected: false, // No longer using selected concept - using icon system instead
+            movie_name: movieNameElement ? movieNameElement.value : '',
             release_date: releaseDate,
-            synopsis: document.getElementById(`title-${titleNumber}-synopsis`).value,
+            synopsis: synopsisElement ? synopsisElement.value : '',
             selected_audio_tracks: selectedAudioTracks,
             selected_subtitle_tracks: selectedSubtitleTracks
         };
@@ -1886,3 +1889,192 @@ function showAlert(message, type = 'info') {
 
 // Note: Encoding progress and status events are handled by encoding.js
 // to avoid conflicts and ensure proper handling
+
+// Title Status Icon Management
+function handleTitleStatusClick(titleNumber) {
+    const iconElement = document.getElementById(`title-status-${titleNumber}`);
+    const statusIcon = iconElement.querySelector('.status-icon');
+    const currentIcon = statusIcon.textContent;
+    
+    switch (currentIcon) {
+        case '➕': // Plus - Queue title
+            queueTitleForEncoding(titleNumber);
+            break;
+        case '❌': // Cross - Retry failed encoding
+            retryFailedEncoding(titleNumber);
+            break;
+        case '➖': // Minus - Remove from queue (shown on hover over hourglass)
+            removeFromQueue(titleNumber);
+            break;
+    }
+}
+
+function handleTitleStatusHover(titleNumber, isHovering) {
+    const iconElement = document.getElementById(`title-status-${titleNumber}`);
+    const statusIcon = iconElement.querySelector('.status-icon');
+    const currentIcon = statusIcon.textContent;
+    
+    if (isHovering) {
+        switch (currentIcon) {
+            case '❌': // Cross - Show retry icon on hover
+                statusIcon.textContent = '🔄';
+                iconElement.title = 'Click to retry encoding';
+                break;
+            case '⏳': // Hourglass - Show minus icon on hover
+                statusIcon.textContent = '➖';
+                iconElement.title = 'Click to remove from queue';
+                break;
+        }
+    } else {
+        // Restore original icon when not hovering
+        updateTitleStatusIcon(titleNumber);
+    }
+}
+
+function updateTitleStatusIcon(titleNumber) {
+    if (!selectedFile) return;
+    
+    const iconElement = document.getElementById(`title-status-${titleNumber}`);
+    if (!iconElement) return;
+    
+    const statusIcon = iconElement.querySelector('.status-icon');
+    
+    // Get the current encoding status for this title
+    const status = getTitleEncodingStatus(selectedFile, titleNumber);
+    
+    switch (status) {
+        case 'completed':
+            statusIcon.textContent = '✅';
+            iconElement.title = 'Encoding completed successfully';
+            iconElement.className = 'title-status-icon status-completed';
+            break;
+        case 'failed':
+            statusIcon.textContent = '❌';
+            iconElement.title = 'Encoding failed - hover to retry';
+            iconElement.className = 'title-status-icon status-failed';
+            break;
+        case 'queued':
+            statusIcon.textContent = '⏳';
+            iconElement.title = 'Queued for encoding - hover to remove';
+            iconElement.className = 'title-status-icon status-queued';
+            break;
+        case 'encoding':
+            statusIcon.textContent = '🔄';
+            iconElement.title = 'Currently encoding';
+            iconElement.className = 'title-status-icon status-encoding';
+            break;
+        default: // not_queued
+            statusIcon.textContent = '➕';
+            iconElement.title = 'Click to queue for encoding';
+            iconElement.className = 'title-status-icon status-not-queued';
+            break;
+    }
+}
+
+function getTitleEncodingStatus(fileName, titleNumber) {
+    // This function should integrate with the existing encoding system
+    // For now, return a default status - this will be updated when integrated with encoding.js
+    if (window.EncodingUI && typeof window.EncodingUI.getJobStatus === 'function') {
+        return window.EncodingUI.getJobStatus(fileName, titleNumber);
+    }
+    return 'not_queued';
+}
+
+function queueTitleForEncoding(titleNumber) {
+    if (!selectedFile) return;
+    
+    // Validate that the title has required data
+    const movieName = document.getElementById(`title-${titleNumber}-name`)?.value || '';
+    const audioCheckboxes = document.querySelectorAll(`input[id^="audio-${titleNumber}-"]:checked`);
+    
+    if (!movieName.trim()) {
+        showAlert('Please enter a movie name before queuing for encoding', 'error');
+        return;
+    }
+    
+    if (audioCheckboxes.length === 0) {
+        showAlert('Please select at least one audio track before queuing for encoding', 'error');
+        return;
+    }
+    
+    // Call the existing encoding system to queue the title
+    if (window.EncodingUI && typeof window.EncodingUI.queueTitle === 'function') {
+        window.EncodingUI.queueTitle(selectedFile, titleNumber);
+    } else {
+        console.warn('EncodingUI not available for queuing title');
+        // Fallback: emit socket event directly
+        if (window.socket) {
+            window.socket.emit('queue_title', {
+                file_name: selectedFile,
+                title_number: titleNumber
+            });
+        }
+    }
+    
+    // Update icon immediately to show queued state
+    updateTitleStatusIcon(titleNumber);
+}
+
+function retryFailedEncoding(titleNumber) {
+    if (!selectedFile) return;
+    
+    // Call the existing encoding system to retry the failed encoding
+    if (window.EncodingUI && typeof window.EncodingUI.retryTitle === 'function') {
+        window.EncodingUI.retryTitle(selectedFile, titleNumber);
+    } else {
+        console.warn('EncodingUI not available for retrying title');
+        // Fallback: emit socket event directly
+        if (window.socket) {
+            window.socket.emit('retry_title', {
+                file_name: selectedFile,
+                title_number: titleNumber
+            });
+        }
+    }
+    
+    // Update icon immediately to show queued state
+    updateTitleStatusIcon(titleNumber);
+}
+
+function removeFromQueue(titleNumber) {
+    if (!selectedFile) return;
+    
+    // Call the existing encoding system to remove from queue
+    if (window.EncodingUI && typeof window.EncodingUI.removeFromQueue === 'function') {
+        window.EncodingUI.removeFromQueue(selectedFile, titleNumber);
+    } else {
+        console.warn('EncodingUI not available for removing from queue');
+        // Fallback: emit socket event directly
+        if (window.socket) {
+            window.socket.emit('remove_from_queue', {
+                file_name: selectedFile,
+                title_number: titleNumber
+            });
+        }
+    }
+    
+    // Update icon immediately to show not queued state
+    updateTitleStatusIcon(titleNumber);
+}
+
+// Update all title status icons when file is selected or status changes
+function updateAllTitleStatusIcons() {
+    if (!selectedFile) return;
+    
+    document.querySelectorAll('.title-section').forEach(titleSection => {
+        const titleNumber = parseInt(titleSection.dataset.titleNumber);
+        if (titleNumber) {
+            updateTitleStatusIcon(titleNumber);
+        }
+    });
+}
+
+// Hook into existing file selection to update icons
+const originalSelectFile = window.selectFile;
+if (originalSelectFile) {
+    window.selectFile = function(fileName) {
+        originalSelectFile(fileName);
+        // Update icons after file selection
+        setTimeout(updateAllTitleStatusIcons, 100);
+    };
+}
