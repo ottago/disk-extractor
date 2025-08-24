@@ -267,20 +267,15 @@
             `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
             '--:--';
         
+        // Create single progress bar with overlaid text
         progressDiv.innerHTML = `
-            <div class="title-progress-header">
-                <span class="title-info">Title ${job.title_number}: ${job.movie_name}</span>
-                <span class="progress-percentage">${Math.round(progress.percentage)}%</span>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar encoding" style="width: ${progress.percentage}%"></div>
-            </div>
-            <div class="progress-details">
-                <span class="encoding-phase ${progress.phase}">${progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1)}</span>
-                <span class="progress-metrics">
-                    <span class="fps-metric">FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'}</span>
-                    <span class="eta-metric">ETA: ${etaDisplay}</span>
-                </span>
+            <div class="compact-progress-container">
+                <div class="progress-bar-background"></div>
+                <div class="progress-bar-fill" style="width: ${progress.percentage}%"></div>
+                <div class="progress-text">
+                    <span class="title-info">Title ${job.title_number}: ${job.movie_name}</span>
+                    <span class="progress-stats">${Math.round(progress.percentage)}% • FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'} • ETA: ${etaDisplay}</span>
+                </div>
             </div>
         `;
         
@@ -295,38 +290,21 @@
             return;
         }
         
-        // Update percentage display
-        const percentageSpan = progressDiv.querySelector('.progress-percentage');
-        if (percentageSpan) {
-            percentageSpan.textContent = `${Math.round(progress.percentage)}%`;
+        // Calculate ETA display
+        const etaDisplay = progress.time_remaining ? 
+            `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
+            '--:--';
+        
+        // Update progress bar fill width
+        const progressFill = progressDiv.querySelector('.progress-bar-fill');
+        if (progressFill) {
+            progressFill.style.width = `${progress.percentage}%`;
         }
         
-        // Update progress bar width
-        const progressBar = progressDiv.querySelector('.progress-bar');
-        if (progressBar) {
-            progressBar.style.width = `${progress.percentage}%`;
-        }
-        
-        // Update phase indicator
-        const phaseSpan = progressDiv.querySelector('.encoding-phase');
-        if (phaseSpan) {
-            phaseSpan.className = `encoding-phase ${progress.phase}`;
-            phaseSpan.textContent = progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1);
-        }
-        
-        // Update FPS
-        const fpsSpan = progressDiv.querySelector('.fps-metric');
-        if (fpsSpan) {
-            fpsSpan.textContent = `FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'}`;
-        }
-        
-        // Update ETA
-        const etaSpan = progressDiv.querySelector('.eta-metric');
-        if (etaSpan) {
-            const etaDisplay = progress.time_remaining ? 
-                `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
-                '--:--';
-            etaSpan.textContent = `ETA: ${etaDisplay}`;
+        // Update progress text content
+        const progressStats = progressDiv.querySelector('.progress-stats');
+        if (progressStats) {
+            progressStats.textContent = `${Math.round(progress.percentage)}% • FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'} • ETA: ${etaDisplay}`;
         }
     }
     
