@@ -481,12 +481,12 @@ function createTitleElement(title) {
     
     titleDiv.innerHTML = `
         <div class="title-header ${shouldCollapseByDefault ? 'collapsed' : ''} ${titleSuggested}" onclick="toggleTitle(${title.title_number})">
-            <div class="title-status-icon" id="title-status-${title.title_number}" 
+            <div class="title-status-icon status-not-queued" id="title-status-${title.title_number}" 
                  onclick="event.stopPropagation(); handleTitleStatusClick(${title.title_number});"
                  onmouseover="handleTitleStatusHover(${title.title_number}, true)"
                  onmouseout="handleTitleStatusHover(${title.title_number}, false)"
                  title="Click to queue for encoding">
-                <span class="status-icon">➕</span>
+                <span class="status-icon"></span>
             </div>
             
             <div class="title-basic-info">
@@ -1890,7 +1890,7 @@ function showAlert(message, type = 'info') {
 // Note: Encoding progress and status events are handled by encoding.js
 // to avoid conflicts and ensure proper handling
 
-// Title Status Icon Management - Standardized to use class names
+// Title Status Icon Management - CSS-Only Icons
 function handleTitleStatusClick(titleNumber) {
     const iconElement = document.getElementById(`title-status-${titleNumber}`);
     if (!iconElement) return;
@@ -1915,23 +1915,23 @@ function handleTitleStatusHover(titleNumber, isHovering) {
     const iconElement = document.getElementById(`title-status-${titleNumber}`);
     if (!iconElement) return;
     
-    const statusIcon = iconElement.querySelector('.status-icon');
     const currentStatus = getTitleStatusFromElement(iconElement);
     
     if (isHovering) {
+        // CSS handles the icon changes via :hover pseudo-class
+        // Just update the title text for better UX
         switch (currentStatus) {
-            case 'status-failed': // Cross - Show retry icon on hover
-                statusIcon.textContent = '🔄';
-                iconElement.title = 'Click to retry encoding';
+            case 'status-failed':
+                iconElement.title = 'Retry encoding';
                 break;
-            case 'status-queued': // Hourglass - Show minus icon on hover
-                statusIcon.textContent = '➖';
-                iconElement.title = 'Click to remove from queue';
+            case 'status-queued':
+                iconElement.title = 'Remove from queue';
                 break;
         }
     } else {
-        // Restore original icon when not hovering
-        updateTitleStatusIcon(titleNumber);
+        // Restore original title when not hovering
+        const statusConfig = getStatusConfig(currentStatus);
+        iconElement.title = statusConfig.title;
     }
 }
 
@@ -1952,8 +1952,6 @@ function updateTitleStatusIcon(titleNumber) {
     const iconElement = document.getElementById(`title-status-${titleNumber}`);
     if (!iconElement) return;
     
-    const statusIcon = iconElement.querySelector('.status-icon');
-    
     // Get the current encoding status for this title
     const encodingStatus = getTitleEncodingStatus(selectedFile, titleNumber);
     const statusClass = mapEncodingStatusToClass(encodingStatus);
@@ -1962,10 +1960,11 @@ function updateTitleStatusIcon(titleNumber) {
     clearStatusClasses(iconElement);
     iconElement.classList.add('title-status-icon', statusClass);
     
-    // Set icon and title based on status
+    // Set title (CSS handles the icon via ::before pseudo-element)
     const statusConfig = getStatusConfig(statusClass);
-    statusIcon.textContent = statusConfig.icon;
     iconElement.title = statusConfig.title;
+    
+    // No need to set icon text content - CSS handles this automatically
 }
 
 function getTitleEncodingStatus(fileName, titleNumber) {
@@ -1988,28 +1987,23 @@ function mapEncodingStatusToClass(encodingStatus) {
     return statusMap[encodingStatus] || 'status-not-queued';
 }
 
-// Helper function to get status configuration
+// Helper function to get status configuration (titles only - icons handled by CSS)
 function getStatusConfig(statusClass) {
     const statusConfigs = {
         'status-completed': {
-            icon: '✅',
             title: 'Encoding completed successfully'
         },
         'status-failed': {
-            icon: '❌',
-            title: 'Encoding failed - hover to retry'
+            title: 'Encoding failed'
         },
         'status-queued': {
-            icon: '⏳',
-            title: 'Queued for encoding - hover to remove'
+            title: 'Queued for encoding'
         },
         'status-encoding': {
-            icon: '🔄',
             title: 'Currently encoding'
         },
         'status-not-queued': {
-            icon: '➕',
-            title: 'Click to queue for encoding'
+            title: 'Add to queue'
         }
     };
     return statusConfigs[statusClass] || statusConfigs['status-not-queued'];

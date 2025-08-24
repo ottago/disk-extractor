@@ -450,7 +450,7 @@ body {
     flex-shrink: 0;
 }
 
-/* Title Status Icon Styles */
+/* Title Status Icon Styles - CSS-Only Icons */
 .title-status-icon {
     flex-shrink: 0;
     width: 24px;
@@ -470,54 +470,85 @@ body {
 }
 
 .title-status-icon .status-icon {
-    font-size: 16px;
+    font-size: 0; /* Hide any text content */
+    display: inline-block;
     transition: all 0.2s ease;
 }
 
-/* Status-specific styling */
-.title-status-icon.status-completed {
+.title-status-icon .status-icon::before {
+    content: '';
+    font-size: 16px;
+    display: inline-block;
+    transition: all 0.2s ease;
+}
+
+/* Status-specific icons using Unicode */
+.title-status-icon.status-not-queued .status-icon::before {
+    content: '➕'; /* Plus sign */
+    color: #6c757d;
+}
+
+.title-status-icon.status-not-queued:hover .status-icon::before {
+    color: #495057;
+}
+
+.title-status-icon.status-queued .status-icon::before {
+    content: '⏳'; /* Hourglass */
+    color: #ffc107;
+}
+
+.title-status-icon.status-queued:hover .status-icon::before {
+    content: '➖'; /* Minus sign on hover */
+}
+
+.title-status-icon.status-encoding .status-icon::before {
+    content: '🔄'; /* Counterclockwise arrows */
+    color: #007bff;
+    animation: rotate 2s linear infinite;
+}
+
+.title-status-icon.status-completed .status-icon::before {
+    content: '✅'; /* Check mark */
     color: #28a745;
 }
 
-.title-status-icon.status-completed:hover {
-    background-color: rgba(40, 167, 69, 0.1);
+.title-status-icon.status-failed .status-icon::before {
+    content: '❌'; /* Cross mark */
+    color: #dc3545;
 }
 
-.title-status-icon.status-failed {
-    color: #dc3545;
+.title-status-icon.status-failed:hover .status-icon::before {
+    content: '🔄'; /* Retry icon on hover */
+}
+
+/* Hover background colors */
+.title-status-icon.status-completed:hover {
+    background-color: rgba(40, 167, 69, 0.1);
 }
 
 .title-status-icon.status-failed:hover {
     background-color: rgba(220, 53, 69, 0.1);
 }
 
-.title-status-icon.status-queued {
-    color: #ffc107;
-}
-
 .title-status-icon.status-queued:hover {
     background-color: rgba(255, 193, 7, 0.1);
-}
-
-.title-status-icon.status-encoding {
-    color: #007bff;
-    animation: pulse 1.5s ease-in-out infinite alternate;
 }
 
 .title-status-icon.status-encoding:hover {
     background-color: rgba(0, 123, 255, 0.1);
 }
 
-.title-status-icon.status-not-queued {
-    color: #6c757d;
-}
-
 .title-status-icon.status-not-queued:hover {
     background-color: rgba(108, 117, 125, 0.1);
-    color: #495057;
 }
 
-/* Pulsing animation for encoding status */
+/* Animations */
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Pulsing animation alternative for encoding status */
 @keyframes pulse {
     0% {
         opacity: 1;
@@ -527,20 +558,6 @@ body {
         opacity: 0.7;
         transform: scale(1.05);
     }
-}
-
-/* Rotating animation alternative for encoding status */
-@keyframes rotate {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-.title-status-icon.status-encoding .status-icon {
-    animation: rotate 2s linear infinite;
 }
 
 .title-basic-info {
@@ -611,7 +628,6 @@ body {
 
 .expand-icon {
     flex-shrink: 0;
-    padding-right: 0.8rem;
     transition: transform 0.2s;
     font-size: 1.2rem;
     color: #666;
@@ -622,29 +638,14 @@ body {
     transform: rotate(-90deg);
 }
 
-.title-content {
-    padding: 1rem;
-    padding-block-start: 0.4rem;
-    padding-block-end: 0rem;
-    display: block;
-}
-
-.title-content.collapsed {
-    display: none;
-}
-    flex-shrink: 0;
-    padding-right: 1rem;
-    transition: transform 0.2s;
-    font-size: 1.2rem;
-    color: #666;
-}
-
 .expand-icon.collapsed {
     transform: rotate(-90deg);
 }
-
+t s
 .title-content {
     padding: 0.8rem;
+    padding-block-start: 0.4rem;
+    padding-block-end: 0rem;
     display: block;
 }
 
