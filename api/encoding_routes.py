@@ -75,7 +75,6 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             # Validate filename
             try:
                 file_name = validate_filename(file_name)
-                logger.debug(f"Filename validation passed: {file_name}")
             except ValidationError as e:
                 logger.error(f"Filename validation failed for '{file_name}': {str(e)}")
                 return jsonify({
@@ -88,7 +87,6 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 title_number = int(title_number)
                 if title_number < 1:
                     raise ValueError("Title number must be positive")
-                logger.debug(f"Title number validation passed: {title_number}")
             except (ValueError, TypeError) as e:
                 logger.error(f"Title number validation failed for '{title_number}': {str(e)}")
                 return jsonify({
@@ -97,8 +95,8 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 }), 400
             
             # Optional preset name
-            preset_name = data.get('preset_name', '').strip()
-            logger.debug(f"Using preset: {preset_name or 'default'}")
+            # NKW preset_name = data.get('preset_name', '').strip()
+            # NKW logger.debug(f"Using preset: {preset_name or 'default'}")
             
             # Check if file exists
             if not metadata_manager.directory:
@@ -122,8 +120,8 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             job_id = encoding_engine.queue_encoding_job(
                 file_name=file_name,
                 title_number=title_number,
-                movie_name=movie_name,
-                preset_name=preset_name
+                movie_name=movie_name
+                # NKW preset_name=preset_name
             )
             
             logger.info(f"Successfully queued encoding job with ID: {job_id}")
