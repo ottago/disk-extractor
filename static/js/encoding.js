@@ -234,58 +234,100 @@
             `;
         }
         
-        // Add progress display for encoding files
+        // Add individual progress bars for each encoding title
         if (encodingStatus === 'encoding') {
-            const progressDiv = createProgressDisplay(movie.file_name);
-            li.appendChild(progressDiv);
+            addProgressBarsForEncodingTitles(li, movie.file_name);
         }
         
         return li;
     }
     
-    // Create progress display for a file
-    function createProgressDisplay(fileName) {
-        const progressDiv = document.createElement('div');
-        progressDiv.className = 'encoding-progress';
-        progressDiv.id = `progress-${fileName}`;
-        
-        // Find encoding jobs for this file
+    // Add individual progress bars for each encoding title
+    function addProgressBarsForEncodingTitles(fileListItem, fileName) {
+        // Find all encoding jobs for this file
         const encodingJobs = jobsState.encoding.filter(job => job.file_name === fileName);
         
+        // Create a progress bar for each encoding title
         encodingJobs.forEach(job => {
-            const jobProgress = document.createElement('div');
-            jobProgress.className = 'job-progress';
-            jobProgress.innerHTML = `
-                <div class="job-info">Title ${job.title_number}: ${job.movie_name}</div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: ${job.progress?.percentage || 0}%">
-                        ${Math.round(job.progress?.percentage || 0)}%
-                    </div>
-                </div>
-            `;
-            progressDiv.appendChild(jobProgress);
+            const progressBar = createTitleProgressBar(job);
+            fileListItem.appendChild(progressBar);
         });
+    }
+    
+    // Create progress bar for a specific title
+    function createTitleProgressBar(job) {
+        const progressDiv = document.createElement('div');
+        progressDiv.className = 'title-progress-bar';
+        progressDiv.id = `progress-${job.file_name}-title-${job.title_number}`;
+        
+        const progress = job.progress || { percentage: 0, phase: 'scanning', fps: 0, time_remaining: 0 };
+        
+        // Calculate ETA display
+        const etaDisplay = progress.time_remaining ? 
+            `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
+            '--:--';
+        
+        progressDiv.innerHTML = `
+            <div class="title-progress-header">
+                <span class="title-info">Title ${job.title_number}: ${job.movie_name}</span>
+                <span class="progress-percentage">${Math.round(progress.percentage)}%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar encoding" style="width: ${progress.percentage}%"></div>
+            </div>
+            <div class="progress-details">
+                <span class="encoding-phase ${progress.phase}">${progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1)}</span>
+                <span class="progress-metrics">
+                    <span class="fps-metric">FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'}</span>
+                    <span class="eta-metric">ETA: ${etaDisplay}</span>
+                </span>
+            </div>
+        `;
         
         return progressDiv;
     }
     
     // Update progress display for specific job
     function updateProgressDisplay(fileName, titleNumber, progress) {
-        const progressDiv = document.getElementById(`progress-${fileName}`);
-        if (!progressDiv) return;
+        const progressDiv = document.getElementById(`progress-${fileName}-title-${titleNumber}`);
+        if (!progressDiv) {
+            console.warn(`Progress display not found for ${fileName} title ${titleNumber}`);
+            return;
+        }
         
-        // Find the specific job progress element
-        const jobProgressElements = progressDiv.querySelectorAll('.job-progress');
-        jobProgressElements.forEach(element => {
-            const titleText = element.querySelector('.job-info').textContent;
-            if (titleText.includes(`Title ${titleNumber}`)) {
-                const progressBar = element.querySelector('.progress-bar');
-                if (progressBar) {
-                    progressBar.style.width = `${progress.percentage}%`;
-                    progressBar.textContent = `${Math.round(progress.percentage)}%`;
-                }
-            }
-        });
+        // Update percentage display
+        const percentageSpan = progressDiv.querySelector('.progress-percentage');
+        if (percentageSpan) {
+            percentageSpan.textContent = `${Math.round(progress.percentage)}%`;
+        }
+        
+        // Update progress bar width
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${progress.percentage}%`;
+        }
+        
+        // Update phase indicator
+        const phaseSpan = progressDiv.querySelector('.encoding-phase');
+        if (phaseSpan) {
+            phaseSpan.className = `encoding-phase ${progress.phase}`;
+            phaseSpan.textContent = progress.phase.charAt(0).toUpperCase() + progress.phase.slice(1);
+        }
+        
+        // Update FPS
+        const fpsSpan = progressDiv.querySelector('.fps-metric');
+        if (fpsSpan) {
+            fpsSpan.textContent = `FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'}`;
+        }
+        
+        // Update ETA
+        const etaSpan = progressDiv.querySelector('.eta-metric');
+        if (etaSpan) {
+            const etaDisplay = progress.time_remaining ? 
+                `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
+                '--:--';
+            etaSpan.textContent = `ETA: ${etaDisplay}`;
+        }
     }
     
     // Queue encoding job for specific title

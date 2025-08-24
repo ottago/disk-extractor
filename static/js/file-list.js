@@ -60,72 +60,8 @@
             </div>
         `;
         
-        // Add progress display for encoding files
-        if (encodingStatus === 'encoding') {
-            const progressDiv = createProgressDisplay(movie.file_name);
-            listItem.appendChild(progressDiv);
-        }
-    }
-
-    // Create progress display for encoding files
-    function createProgressDisplay(fileName) {
-        const progressDiv = document.createElement('div');
-        progressDiv.className = 'encoding-progress';
-        progressDiv.id = `progress-${fileName}`;
-        
-        // Progress bar
-        const progressBarContainer = document.createElement('div');
-        progressBarContainer.className = 'progress-bar-container';
-        
-        const progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar encoding';
-        progressBar.style.width = '0%';
-        
-        progressBarContainer.appendChild(progressBar);
-        progressDiv.appendChild(progressBarContainer);
-        
-        // Progress metrics
-        const metricsDiv = document.createElement('div');
-        metricsDiv.className = 'progress-metrics';
-        
-        // Percentage and phase
-        const leftMetrics = document.createElement('div');
-        leftMetrics.style.display = 'flex';
-        leftMetrics.style.alignItems = 'center';
-        leftMetrics.style.gap = '0.5rem';
-        
-        const percentageSpan = document.createElement('span');
-        percentageSpan.className = 'progress-metric';
-        percentageSpan.innerHTML = '<span class="metric-value">0%</span>';
-        
-        const phaseSpan = document.createElement('span');
-        phaseSpan.className = 'encoding-phase scanning';
-        phaseSpan.textContent = 'Scanning';
-        
-        leftMetrics.appendChild(percentageSpan);
-        leftMetrics.appendChild(phaseSpan);
-        
-        // FPS and time metrics
-        const rightMetrics = document.createElement('div');
-        rightMetrics.style.display = 'flex';
-        rightMetrics.style.gap = '1rem';
-        
-        const fpsSpan = document.createElement('span');
-        fpsSpan.className = 'progress-metric';
-        fpsSpan.innerHTML = '<span class="metric-label">FPS:</span> <span class="metric-value">0</span>';
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'progress-metric';
-        timeSpan.innerHTML = '<span class="metric-label">ETA:</span> <span class="metric-value">--:--</span>';
-        
-        rightMetrics.appendChild(fpsSpan);
-        rightMetrics.appendChild(timeSpan);
-        
-        metricsDiv.appendChild(leftMetrics);
-        metricsDiv.appendChild(rightMetrics);
-        progressDiv.appendChild(metricsDiv);
-        
-        return progressDiv;
+        // Note: Individual title progress bars are now handled by encoding.js
+        // via addProgressBarsForEncodingTitles() function
     }
 
     // Update file list with new data
@@ -192,7 +128,6 @@
     // Make functions globally available
     window.formatFileListItem = formatFileListItem;
     window.populateFileListItem = populateFileListItem;
-    window.createProgressDisplay = createProgressDisplay;
     window.updateFileList = updateFileList;
     window.updateFileItemStatus = updateFileItemStatus;
 
