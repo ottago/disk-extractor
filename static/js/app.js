@@ -1890,37 +1890,41 @@ function showAlert(message, type = 'info') {
 // Note: Encoding progress and status events are handled by encoding.js
 // to avoid conflicts and ensure proper handling
 
-// Title Status Icon Management
+// Title Status Icon Management - Standardized to use class names
 function handleTitleStatusClick(titleNumber) {
     const iconElement = document.getElementById(`title-status-${titleNumber}`);
-    const statusIcon = iconElement.querySelector('.status-icon');
-    const currentIcon = statusIcon.textContent;
+    if (!iconElement) return;
     
-    switch (currentIcon) {
-        case '➕': // Plus - Queue title
+    const currentStatus = getTitleStatusFromElement(iconElement);
+    
+    switch (currentStatus) {
+        case 'status-not-queued': // Plus - Queue title
             queueTitleForEncoding(titleNumber);
             break;
-        case '❌': // Cross - Retry failed encoding
+        case 'status-failed': // Cross - Retry failed encoding (or retry icon on hover)
             retryFailedEncoding(titleNumber);
             break;
-        case '➖': // Minus - Remove from queue (shown on hover over hourglass)
+        case 'status-queued': // Hourglass - Remove from queue (or minus icon on hover)
             removeFromQueue(titleNumber);
             break;
+        // No action for completed or encoding states
     }
 }
 
 function handleTitleStatusHover(titleNumber, isHovering) {
     const iconElement = document.getElementById(`title-status-${titleNumber}`);
+    if (!iconElement) return;
+    
     const statusIcon = iconElement.querySelector('.status-icon');
-    const currentIcon = statusIcon.textContent;
+    const currentStatus = getTitleStatusFromElement(iconElement);
     
     if (isHovering) {
-        switch (currentIcon) {
-            case '❌': // Cross - Show retry icon on hover
+        switch (currentStatus) {
+            case 'status-failed': // Cross - Show retry icon on hover
                 statusIcon.textContent = '🔄';
                 iconElement.title = 'Click to retry encoding';
                 break;
-            case '⏳': // Hourglass - Show minus icon on hover
+            case 'status-queued': // Hourglass - Show minus icon on hover
                 statusIcon.textContent = '➖';
                 iconElement.title = 'Click to remove from queue';
                 break;
@@ -1929,6 +1933,17 @@ function handleTitleStatusHover(titleNumber, isHovering) {
         // Restore original icon when not hovering
         updateTitleStatusIcon(titleNumber);
     }
+}
+
+function getTitleStatusFromElement(iconElement) {
+    // Extract status from class names
+    const classList = iconElement.classList;
+    for (const className of classList) {
+        if (className.startsWith('status-')) {
+            return className;
+        }
+    }
+    return 'status-not-queued'; // Default fallback
 }
 
 function updateTitleStatusIcon(titleNumber) {
@@ -1940,44 +1955,76 @@ function updateTitleStatusIcon(titleNumber) {
     const statusIcon = iconElement.querySelector('.status-icon');
     
     // Get the current encoding status for this title
-    const status = getTitleEncodingStatus(selectedFile, titleNumber);
+    const encodingStatus = getTitleEncodingStatus(selectedFile, titleNumber);
+    const statusClass = mapEncodingStatusToClass(encodingStatus);
     
-    switch (status) {
-        case 'completed':
-            statusIcon.textContent = '✅';
-            iconElement.title = 'Encoding completed successfully';
-            iconElement.className = 'title-status-icon status-completed';
-            break;
-        case 'failed':
-            statusIcon.textContent = '❌';
-            iconElement.title = 'Encoding failed - hover to retry';
-            iconElement.className = 'title-status-icon status-failed';
-            break;
-        case 'queued':
-            statusIcon.textContent = '⏳';
-            iconElement.title = 'Queued for encoding - hover to remove';
-            iconElement.className = 'title-status-icon status-queued';
-            break;
-        case 'encoding':
-            statusIcon.textContent = '🔄';
-            iconElement.title = 'Currently encoding';
-            iconElement.className = 'title-status-icon status-encoding';
-            break;
-        default: // not_queued
-            statusIcon.textContent = '➕';
-            iconElement.title = 'Click to queue for encoding';
-            iconElement.className = 'title-status-icon status-not-queued';
-            break;
-    }
+    // Clear all status classes and add the current one
+    clearStatusClasses(iconElement);
+    iconElement.classList.add('title-status-icon', statusClass);
+    
+    // Set icon and title based on status
+    const statusConfig = getStatusConfig(statusClass);
+    statusIcon.textContent = statusConfig.icon;
+    iconElement.title = statusConfig.title;
 }
 
 function getTitleEncodingStatus(fileName, titleNumber) {
-    // This function should integrate with the existing encoding system
-    // For now, return a default status - this will be updated when integrated with encoding.js
+    // This function integrates with the existing encoding system
     if (window.EncodingUI && typeof window.EncodingUI.getJobStatus === 'function') {
         return window.EncodingUI.getJobStatus(fileName, titleNumber);
     }
     return 'not_queued';
+}
+
+// Helper function to map encoding status to CSS class
+function mapEncodingStatusToClass(encodingStatus) {
+    const statusMap = {
+        'completed': 'status-completed',
+        'failed': 'status-failed',
+        'queued': 'status-queued',
+        'encoding': 'status-encoding',
+        'not_queued': 'status-not-queued'
+    };
+    return statusMap[encodingStatus] || 'status-not-queued';
+}
+
+// Helper function to get status configuration
+function getStatusConfig(statusClass) {
+    const statusConfigs = {
+        'status-completed': {
+            icon: '✅',
+            title: 'Encoding completed successfully'
+        },
+        'status-failed': {
+            icon: '❌',
+            title: 'Encoding failed - hover to retry'
+        },
+        'status-queued': {
+            icon: '⏳',
+            title: 'Queued for encoding - hover to remove'
+        },
+        'status-encoding': {
+            icon: '🔄',
+            title: 'Currently encoding'
+        },
+        'status-not-queued': {
+            icon: '➕',
+            title: 'Click to queue for encoding'
+        }
+    };
+    return statusConfigs[statusClass] || statusConfigs['status-not-queued'];
+}
+
+// Helper function to clear all status classes
+function clearStatusClasses(iconElement) {
+    const statusClasses = [
+        'status-completed',
+        'status-failed', 
+        'status-queued',
+        'status-encoding',
+        'status-not-queued'
+    ];
+    iconElement.classList.remove(...statusClasses);
 }
 
 function queueTitleForEncoding(titleNumber) {

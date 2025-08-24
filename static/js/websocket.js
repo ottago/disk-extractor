@@ -177,34 +177,40 @@
     }
     
     function updateFileItemStatusFallback(fileItem, status) {
-        // Remove existing status classes
-        fileItem.classList.remove('queued', 'encoding', 'completed', 'failed');
-        
-        // Add new status class
-        if (status && status !== 'not_queued') {
-            fileItem.classList.add(status);
-        }
-        
-        // Update file info text
-        const fileInfo = fileItem.querySelector('.file-info');
-        if (fileInfo) {
-            let infoText = fileInfo.textContent;
+        // Use the new class-based approach
+        if (window.updateFileItemStatus) {
+            window.updateFileItemStatus(fileItem, status);
+        } else {
+            // Fallback implementation using class-based approach
+            const encodingClasses = ['queued', 'encoding', 'completed', 'failed'];
+            fileItem.classList.remove(...encodingClasses);
             
-            // Remove existing encoding status
-            infoText = infoText.replace(/ • (Queued|Encoding|Completed|Failed)/g, '');
-            
-            // Add new encoding status
+            // Add new status class
             if (status && status !== 'not_queued') {
-                const statusMap = {
-                    'queued': 'Queued',
-                    'encoding': 'Encoding',
-                    'completed': 'Completed',
-                    'failed': 'Failed'
-                };
-                infoText += ` • ${statusMap[status] || status}`;
+                fileItem.classList.add(status);
             }
             
-            fileInfo.textContent = infoText;
+            // Update file info text
+            const fileInfo = fileItem.querySelector('.file-info');
+            if (fileInfo) {
+                let infoText = fileInfo.textContent;
+                
+                // Remove existing encoding status
+                infoText = infoText.replace(/ • (Queued|Encoding|Completed|Failed)/g, '');
+                
+                // Add new encoding status
+                if (status && status !== 'not_queued') {
+                    const statusMap = {
+                        'queued': 'Queued',
+                        'encoding': 'Encoding',
+                        'completed': 'Completed',
+                        'failed': 'Failed'
+                    };
+                    infoText += ` • ${statusMap[status] || status}`;
+                }
+                
+                fileInfo.textContent = infoText;
+            }
         }
     }
 

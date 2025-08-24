@@ -155,10 +155,45 @@
         });
     }
 
+    // Update file item status using class-based approach
+    function updateFileItemStatus(fileItem, encodingStatus) {
+        // Remove existing encoding status classes
+        const encodingClasses = ['queued', 'encoding', 'completed', 'failed'];
+        fileItem.classList.remove(...encodingClasses);
+        
+        // Add new status class if not default
+        if (encodingStatus && encodingStatus !== 'not_queued') {
+            fileItem.classList.add(encodingStatus);
+        }
+        
+        // Update file info text
+        const fileInfo = fileItem.querySelector('.file-info');
+        if (fileInfo) {
+            let infoText = fileInfo.textContent;
+            
+            // Remove existing encoding status text
+            infoText = infoText.replace(/ • (Queued|Encoding|Completed|Failed)/g, '');
+            
+            // Add new encoding status text
+            if (encodingStatus && encodingStatus !== 'not_queued') {
+                const statusMap = {
+                    'queued': 'Queued',
+                    'encoding': 'Encoding',
+                    'completed': 'Completed',
+                    'failed': 'Failed'
+                };
+                infoText += ` • ${statusMap[encodingStatus] || encodingStatus}`;
+            }
+            
+            fileInfo.textContent = infoText;
+        }
+    }
+
     // Make functions globally available
     window.formatFileListItem = formatFileListItem;
     window.populateFileListItem = populateFileListItem;
     window.createProgressDisplay = createProgressDisplay;
     window.updateFileList = updateFileList;
+    window.updateFileItemStatus = updateFileItemStatus;
 
 })();
