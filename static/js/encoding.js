@@ -174,6 +174,7 @@
     }
     
     // Update file list with encoding status
+    // FIME: This updated the while file list every time.  It should skip updates if not needed and/or update in place.
     function updateFileListWithEncodingStatus() {
         const fileList = document.getElementById('fileList');
         if (!fileList) return;
