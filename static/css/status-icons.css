@@ -1,0 +1,103 @@
+/* Status Icons - CSS Only Implementation */
+
+/* Base status icon styling */
+.title-status-icon .status-icon {
+    display: inline-block;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+/* Hide any text content and use CSS-generated content instead */
+.title-status-icon .status-icon {
+    font-size: 0; /* Hide any text content */
+}
+
+.title-status-icon .status-icon::before {
+    content: '';
+    font-size: 16px;
+    display: inline-block;
+    transition: all 0.2s ease;
+}
+
+/* Status-specific icons using Unicode */
+.title-status-icon.status-not-queued .status-icon::before {
+    content: '➕'; /* Plus sign */
+}
+
+.title-status-icon.status-queued .status-icon::before {
+    content: '⏳'; /* Hourglass */
+}
+
+.title-status-icon.status-encoding .status-icon::before {
+    content: '🔄'; /* Counterclockwise arrows */
+}
+
+.title-status-icon.status-completed .status-icon::before {
+    content: '✅'; /* Check mark */
+}
+
+.title-status-icon.status-failed .status-icon::before {
+    content: '❌'; /* Cross mark */
+}
+
+/* Hover state icons */
+.title-status-icon.status-failed:hover .status-icon::before {
+    content: '🔄'; /* Retry icon on hover */
+}
+
+.title-status-icon.status-queued:hover .status-icon::before {
+    content: '➖'; /* Minus sign on hover */
+}
+
+/* Animation for encoding status */
+.title-status-icon.status-encoding .status-icon::before {
+    animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Pulsing animation alternative */
+.title-status-icon.status-encoding.pulse .status-icon::before {
+    animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+/* Status-specific colors (from existing CSS) */
+.title-status-icon.status-completed .status-icon::before {
+    color: #28a745;
+}
+
+.title-status-icon.status-failed .status-icon::before {
+    color: #dc3545;
+}
+
+.title-status-icon.status-queued .status-icon::before {
+    color: #ffc107;
+}
+
+.title-status-icon.status-encoding .status-icon::before {
+    color: #007bff;
+}
+
+.title-status-icon.status-not-queued .status-icon::before {
+    color: #6c757d;
+}
+
+/* Hover color changes */
+.title-status-icon.status-not-queued:hover .status-icon::before {
+    color: #495057;
+}
