@@ -77,7 +77,7 @@
         }
         
         // Set up periodic status updates
-        setInterval(requestEncodingStatus, 5000);
+        setInterval(requestEncodingStatus, 60000);
         console.log('Encoding UI initialized');
     }
     
