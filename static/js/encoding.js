@@ -498,13 +498,7 @@
             const job = findJobByFileAndTitle(selectedFile, titleNumber);
             const isCompleted = job && job.status === 'completed';
             
-            // Update completion icon (only remaining secondary indicator)
-            const completionIcon = document.getElementById(`completion-icon-${titleNumber}`);
-            if (completionIcon) {
-                completionIcon.style.display = isCompleted ? 'inline' : 'none';
-            }
-            
-            // Update section classes for styling
+            // Update section classes for styling (main status icon handles visual indicators)
             section.classList.toggle('encoding', isEncoding);
             section.classList.toggle('queued', isQueued);
             section.classList.toggle('completed', isCompleted);

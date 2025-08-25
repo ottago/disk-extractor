@@ -1519,13 +1519,6 @@ body {
         padding: 4px 8px;
     }
 }
-/* Completion icon in title header */
-.completion-icon {
-    margin-left: 0.5rem;
-    color: #28a745;
-    font-size: 0.875rem;
-}
-
 /* Title encoding status styling */
 .title-encoding .title-header {
     background: #fff3cd;

@@ -491,7 +491,6 @@ function createTitleElement(title) {
             
             <div class="title-basic-info">
                 <span class="title-number">Title ${title.title_number}</span>
-                <span class="completion-icon" id="completion-icon-${title.title_number}" style="display: none;">✅</span>
             </div>
             
             <div class="movie-name-box" style="display: ${shouldCollapseByDefault && title.movie_name ? 'block' : 'none'};">
@@ -1536,7 +1535,6 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
     if (!selectedFile) return;
     
     const statusSection = document.getElementById(`encoding-status-${titleNumber}`);
-    const completionIcon = document.getElementById(`completion-icon-${titleNumber}`);
     if (!statusSection) return;
     
     // Find jobs for this file and title
