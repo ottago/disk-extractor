@@ -492,7 +492,6 @@ function createTitleElement(title) {
             <div class="title-basic-info">
                 <span class="title-number">Title ${title.title_number}</span>
                 <span class="completion-icon" id="completion-icon-${title.title_number}" style="display: none;">✅</span>
-                <span class="cancel-encoding-icon" id="cancel-encoding-${title.title_number}" style="display: none;" onclick="event.stopPropagation(); cancelTitleEncoding(${title.title_number});" title="Cancel encoding">❌</span>
             </div>
             
             <div class="movie-name-box" style="display: ${shouldCollapseByDefault && title.movie_name ? 'block' : 'none'};">
@@ -1907,7 +1906,10 @@ function handleTitleStatusClick(titleNumber) {
         case 'status-queued': // Hourglass - Remove from queue (or minus icon on hover)
             removeFromQueue(titleNumber);
             break;
-        // No action for completed or encoding states
+        case 'status-encoding': // Encoding - Cancel encoding (stop icon on hover)
+            cancelEncodingJob(titleNumber);
+            break;
+        // No action for completed state
     }
 }
 
@@ -1922,10 +1924,13 @@ function handleTitleStatusHover(titleNumber, isHovering) {
         // Just update the title text for better UX
         switch (currentStatus) {
             case 'status-failed':
-                iconElement.title = 'Retry encoding';
+                iconElement.title = 'Click to retry encoding';
                 break;
             case 'status-queued':
-                iconElement.title = 'Remove from queue';
+                iconElement.title = 'Click to remove from queue';
+                break;
+            case 'status-encoding':
+                iconElement.title = 'Click to cancel encoding';
                 break;
         }
     } else {
@@ -2019,6 +2024,19 @@ function clearStatusClasses(iconElement) {
         'status-not-queued'
     ];
     iconElement.classList.remove(...statusClasses);
+}
+
+function cancelEncodingJob(titleNumber) {
+    if (!selectedFile) {
+        console.error('No file selected for canceling encoding');
+        return;
+    }
+    
+    if (window.EncodingUI && typeof window.EncodingUI.cancelTitleEncoding === 'function') {
+        window.EncodingUI.cancelTitleEncoding(selectedFile, titleNumber);
+    } else {
+        console.error('EncodingUI not available for canceling encoding');
+    }
 }
 
 function queueTitleForEncoding(titleNumber) {

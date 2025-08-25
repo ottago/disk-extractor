@@ -507,6 +507,11 @@ body {
     animation: rotate 2s linear infinite;
 }
 
+.title-status-icon.status-encoding:hover .status-icon::before {
+    content: '⏹️'; /* Stop button on hover */
+    animation: none; /* Stop rotation on hover */
+}
+
 .title-status-icon.status-completed .status-icon::before {
     content: '✅'; /* Check mark */
     color: #28a745;
@@ -1519,21 +1524,6 @@ body {
     margin-left: 0.5rem;
     color: #28a745;
     font-size: 0.875rem;
-}
-
-/* Cancel encoding icon in title header */
-.cancel-encoding-icon {
-    color: #dc3545;
-    font-size: 0.875rem;
-    margin-left: 0.5rem;
-    cursor: pointer;
-    padding: 0.2rem;
-    border-radius: 3px;
-    transition: background-color 0.2s;
-}
-
-.cancel-encoding-icon:hover {
-    background-color: rgba(220, 53, 69, 0.1);
 }
 
 /* Title encoding status styling */

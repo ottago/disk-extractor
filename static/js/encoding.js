@@ -498,19 +498,13 @@
             const job = findJobByFileAndTitle(selectedFile, titleNumber);
             const isCompleted = job && job.status === 'completed';
             
-            // Update cancel button visibility
-            const cancelIcon = document.getElementById(`cancel-encoding-${titleNumber}`);
-            if (cancelIcon) {
-                cancelIcon.style.display = (isEncoding || isQueued) ? 'inline' : 'none';
-            }
-            
-            // Update completion icon
-            const completionIcon = document.getElementById(`completion-${titleNumber}`);
+            // Update completion icon (only remaining secondary indicator)
+            const completionIcon = document.getElementById(`completion-icon-${titleNumber}`);
             if (completionIcon) {
                 completionIcon.style.display = isCompleted ? 'inline' : 'none';
             }
             
-            // Update section classes
+            // Update section classes for styling
             section.classList.toggle('encoding', isEncoding);
             section.classList.toggle('queued', isQueued);
             section.classList.toggle('completed', isCompleted);
