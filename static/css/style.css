@@ -427,6 +427,27 @@ body {
     border-bottom: 1px solid #e0e0e0;
     background: #f8f9fa;
     border-radius: 8px 8px 0 0;
+    position: relative; /* For progress background positioning */
+    overflow: hidden; /* Ensure progress doesn't overflow rounded corners */
+}
+
+/* Live progress background for encoding titles */
+.title-header .progress-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #ffc107, #e0a800);
+    transition: width 0.3s ease;
+    z-index: 1;
+    opacity: 0.3; /* Subtle background effect */
+    width: 0%; /* Default to no progress */
+}
+
+/* Ensure title content appears above progress background */
+.title-header > * {
+    position: relative;
+    z-index: 2;
 }
 
 .title-header:hover {

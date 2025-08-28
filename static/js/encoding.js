@@ -108,7 +108,7 @@
     
     // Handle individual job progress updates
     function handleEncodingProgress(data) {
-        console.log('🎯 Progress update:', data);
+        console.log('🎯 Progress update received:', data);
         const { job_id, progress } = data;
         
         // Find the job in our state and update its progress
@@ -118,9 +118,12 @@
         if (job) {
             job.progress = progress;
             console.log(`📊 Updated progress for ${job.file_name} title ${job.title_number}: ${progress.percentage}%`);
+            console.log(`📊 About to call updateProgressDisplay...`);
             
             // Update progress display
             updateProgressDisplay(job.file_name, job.title_number, progress);
+        } else {
+            console.log(`❌ Job not found for progress update: ${job_id}`);
         }
     }
     
@@ -153,6 +156,9 @@
         
         if (!jobFound) {
             console.warn(`Job ${job_id} not found in current state for status update`);
+            console.log('🔄 Requesting full encoding status update to sync state');
+            // Request full status update to sync our state
+            requestEncodingStatus();
         }
         
         // Refresh UI
@@ -282,29 +288,78 @@
         return progressDiv;
     }
     
+    // Refresh progress tracking after DOM rebuild
+    function refreshProgressTracking() {
+        if (!selectedFile) return;
+        
+        console.log(`🔄 Refreshing progress tracking for ${selectedFile}`);
+        
+        // First, recreate any missing progress elements
+        updateTitleEncodingStatusDisplay();
+        
+        // Then update progress for all encoding jobs
+        const encodingJobs = jobsState.encoding.filter(job => job.file_name === selectedFile);
+        encodingJobs.forEach(job => {
+            if (job.progress) {
+                console.log(`🔄 Refreshing progress for ${job.file_name} title ${job.title_number}: ${job.progress.percentage}%`);
+                updateProgressDisplay(job.file_name, job.title_number, job.progress);
+            }
+        });
+    }
+
     // Update progress display for specific job
     function updateProgressDisplay(fileName, titleNumber, progress) {
+        console.log(`🔍 updateProgressDisplay: ${fileName} title ${titleNumber}, progress: ${progress.percentage}%`);
+        console.log(`🔍 selectedFile: ${selectedFile}, match: ${selectedFile === fileName}`);
+        
+        // Update compact progress bar in file list
         const progressDiv = document.getElementById(`progress-${fileName}-title-${titleNumber}`);
-        if (!progressDiv) {
-            console.warn(`Progress display not found for ${fileName} title ${titleNumber}`);
-            return;
+        if (progressDiv) {
+            console.log(`✅ File list progress bar found and updated`);
+            // Calculate ETA display
+            const etaDisplay = progress.time_remaining ? 
+                `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
+                '--:--';
+            
+            // Update progress bar fill width
+            const progressFill = progressDiv.querySelector('.progress-bar-fill');
+            if (progressFill) {
+                progressFill.style.width = `${progress.percentage}%`;
+            }
+            
+            // Update progress text content
+            const progressStats = progressDiv.querySelector('.progress-stats');
+            if (progressStats) {
+                progressStats.textContent = `${Math.round(progress.percentage)}% • FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'} • ETA: ${etaDisplay}`;
+            }
+        } else {
+            console.log(`❌ File list progress bar NOT found: progress-${fileName}-title-${titleNumber}`);
         }
         
-        // Calculate ETA display
-        const etaDisplay = progress.time_remaining ? 
-            `${Math.floor(progress.time_remaining / 60)}:${(progress.time_remaining % 60).toString().padStart(2, '0')}` : 
-            '--:--';
-        
-        // Update progress bar fill width
-        const progressFill = progressDiv.querySelector('.progress-bar-fill');
-        if (progressFill) {
-            progressFill.style.width = `${progress.percentage}%`;
-        }
-        
-        // Update progress text content
-        const progressStats = progressDiv.querySelector('.progress-stats');
-        if (progressStats) {
-            progressStats.textContent = `${Math.round(progress.percentage)}% • FPS: ${progress.fps ? progress.fps.toFixed(1) : '0'} • ETA: ${etaDisplay}`;
+        // Update title header progress background (only for currently selected file)
+        if (selectedFile === fileName) {
+            const titleProgressBg = document.getElementById(`title-progress-bg-${titleNumber}`);
+            console.log(`🎯 Looking for title header progress: title-progress-bg-${titleNumber}`);
+            console.log(`🎯 Title header progress element found: ${!!titleProgressBg}`);
+            
+            if (titleProgressBg) {
+                const oldWidth = titleProgressBg.style.width;
+                titleProgressBg.style.width = `${progress.percentage}%`;
+                console.log(`✅ Title header progress updated: ${oldWidth} → ${progress.percentage}%`);
+                
+                // Verify the update actually took effect
+                setTimeout(() => {
+                    const newWidth = titleProgressBg.style.width;
+                    console.log(`🔍 Verification - Title header width is now: ${newWidth}`);
+                }, 100);
+            } else {
+                console.log(`❌ Title header progress element NOT found!`);
+                // Let's see what title progress elements actually exist
+                const allTitleProgressBgs = document.querySelectorAll('[id^="title-progress-bg-"]');
+                console.log(`🔍 All title progress backgrounds found:`, Array.from(allTitleProgressBgs).map(el => el.id));
+            }
+        } else {
+            console.log(`⏭️ Skipping title header update (different file selected)`);
         }
     }
     
@@ -502,7 +557,59 @@
             section.classList.toggle('encoding', isEncoding);
             section.classList.toggle('queued', isQueued);
             section.classList.toggle('completed', isCompleted);
+            
+            // Add/remove progress background for encoding titles
+            const titleHeader = section.querySelector('.title-header');
+            if (titleHeader) {
+                updateTitleHeaderProgress(titleHeader, titleNumber, isEncoding, job);
+            }
         });
+    }
+    
+    // Update title header progress background
+    function updateTitleHeaderProgress(titleHeader, titleNumber, isEncoding, job) {
+        let progressBackground = titleHeader.querySelector('.progress-background');
+        
+        if (isEncoding) {
+            // Add progress background if it doesn't exist
+            if (!progressBackground) {
+                progressBackground = document.createElement('div');
+                progressBackground.className = 'progress-background';
+                progressBackground.id = `title-progress-bg-${titleNumber}`;
+                titleHeader.insertBefore(progressBackground, titleHeader.firstChild);
+                
+                // Debug: Check element properties
+                console.log(`🔍 Created progress element:`, {
+                    id: progressBackground.id,
+                    className: progressBackground.className,
+                    parent: titleHeader.tagName,
+                    parentClasses: titleHeader.className,
+                    computedStyle: window.getComputedStyle(progressBackground)
+                });
+            }
+            
+            // Update progress width with current progress data
+            const progress = job?.progress?.percentage || 0;
+            progressBackground.style.width = `${progress}%`;
+            
+            // Debug: Check final element state
+            const computedStyle = window.getComputedStyle(progressBackground);
+            console.log(`🎨 Progress element styles:`, {
+                width: progressBackground.style.width,
+                computedWidth: computedStyle.width,
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                zIndex: computedStyle.zIndex,
+                position: computedStyle.position,
+                background: computedStyle.background
+            });
+        } else {
+            // Remove progress background if encoding is not active
+            if (progressBackground) {
+                progressBackground.remove();
+            }
+        }
     }
     
     // Format encoding status for display
@@ -615,6 +722,7 @@
         queueTitle: queueSingleTitle,
         retryTitle: retrySingleTitle,
         removeFromQueue: removeFromQueueSingle,
+        refreshProgressTracking: refreshProgressTracking,
         setSelectedFile: function(fileName) {
             selectedFile = fileName;
             updateAddToQueueButton();

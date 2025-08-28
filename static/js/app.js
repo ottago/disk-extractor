@@ -124,6 +124,11 @@ function selectFile(filename) {
     
     selectedFile = safeFilename;
     
+    // Notify EncodingUI about file selection
+    if (window.EncodingUI && typeof window.EncodingUI.setSelectedFile === 'function') {
+        window.EncodingUI.setSelectedFile(safeFilename);
+    }
+    
     // Update UI
     document.querySelectorAll('.file-item').forEach(item => {
         item.classList.remove('active');
@@ -389,6 +394,10 @@ function displayEnhancedMetadata() {
     // Update title status icons after titles are created
     setTimeout(() => {
         updateAllTitleStatusIcons();
+        // Refresh progress tracking after DOM is fully rebuilt
+        if (window.EncodingUI && window.EncodingUI.refreshProgressTracking) {
+            window.EncodingUI.refreshProgressTracking();
+        }
     }, 150);
 }
 
