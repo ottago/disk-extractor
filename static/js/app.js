@@ -380,25 +380,25 @@ function displayEnhancedMetadata() {
     console.log('All title elements created and appended');
     
     // Update Add to Queue button now that titles are loaded
-    setTimeout(() => {
-        if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
-            window.EncodingUI.updateAddToQueueButton();
-        }
-    }, 50);
+    if (window.EncodingUI && window.EncodingUI.updateAddToQueueButton) {
+        window.EncodingUI.updateAddToQueueButton();
+    }
     
     // Check encoding status for all titles after they're created
-    setTimeout(() => {
-        checkEncodingStatusForAllTitles();
-    }, 100);
+    checkEncodingStatusForAllTitles();
     
     // Update title status icons after titles are created
-    setTimeout(() => {
-        updateAllTitleStatusIcons();
-        // Refresh progress tracking after DOM is fully rebuilt
-        if (window.EncodingUI && window.EncodingUI.refreshProgressTracking) {
-            window.EncodingUI.refreshProgressTracking();
-        }
-    }, 150);
+    updateAllTitleStatusIcons();
+    
+    // Update encoding status displays now that DOM is ready
+    if (window.EncodingUI && window.EncodingUI.updateTitleEncodingStatusDisplay) {
+        window.EncodingUI.updateTitleEncodingStatusDisplay();
+    }
+    
+    // Refresh progress tracking after DOM is fully built
+    if (window.EncodingUI && window.EncodingUI.refreshProgressTracking) {
+        window.EncodingUI.refreshProgressTracking();
+    }
 }
 
 // Create title element

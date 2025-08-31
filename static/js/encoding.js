@@ -286,7 +286,7 @@
     function refreshProgressTracking() {
         if (!selectedFile) return;
         
-        // First, recreate any missing progress elements
+        // First, recreate any missing progress elements and output displays
         updateTitleEncodingStatusDisplay();
         
         // Then update progress for all encoding jobs
@@ -531,7 +531,74 @@
             if (titleHeader) {
                 updateTitleHeaderProgress(titleHeader, titleNumber, isEncoding, job);
             }
+            
+            // Add/remove output file display for completed titles
+            updateOutputFileDisplay(section, titleNumber, isCompleted, job);
         });
+    }
+    
+    // Update output file display for completed encodings
+    function updateOutputFileDisplay(titleSection, titleNumber, isCompleted, job) {
+        let outputDiv = titleSection.querySelector('.output-file-display');
+        
+        if (isCompleted && (job?.output_filename || job?.output_path)) {
+            if (!outputDiv) {
+                outputDiv = document.createElement('div');
+                outputDiv.className = 'output-file-display';
+                titleSection.appendChild(outputDiv);
+            }
+            
+            // Use output_filename if available, otherwise extract filename from output_path
+            const outputFile = job.output_filename || (job.output_path ? job.output_path.split('/').pop() : '');
+            const sizeText = job.output_size_bytes ? ` (${formatFileSize(job.output_size_bytes)})` : '';
+            outputDiv.innerHTML = `
+                <div class="output-file-row">
+                    <span class="output-file-name">${outputFile}${sizeText}</span>
+                    <button class="delete-output-btn" onclick="deleteOutputFile('${selectedFile}', ${titleNumber}, '${outputFile}')">×</button>
+                </div>
+            `;
+        } else if (outputDiv) {
+            outputDiv.remove();
+        }
+    }
+    
+    // Delete output file with confirmation
+    function deleteOutputFile(fileName, titleNumber, outputFile) {
+        if (confirm(`Delete output file: ${outputFile}?`)) {
+            fetch('/api/delete_output', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_name: fileName,
+                    title_number: titleNumber,
+                    output_file: outputFile
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove the job from completed state
+                    const job = findJobByFileAndTitle(fileName, titleNumber);
+                    if (job) {
+                        jobsState.completed = jobsState.completed.filter(j => j !== job);
+                        updateTitleEncodingStatusDisplay();
+                    }
+                } else {
+                    alert('Failed to delete file: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error deleting file: ' + error.message);
+            });
+        }
+    }
+    
+    // Format file size for display
+    function formatFileSize(bytes) {
+        if (!bytes) return '';
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
     
     // Update title header progress background
@@ -660,6 +727,7 @@
         handleEncodingStatusChange: handleEncodingStatusChange,
         updateFileListWithEncodingStatus: updateFileListWithEncodingStatus,
         updateAddToQueueButton: updateAddToQueueButton,
+        updateTitleEncodingStatusDisplay: updateTitleEncodingStatusDisplay,
         checkForValidSelectedTitles: checkForValidSelectedTitles,
         addSelectedTitlesToQueue: addSelectedTitlesToQueue,
         cancelTitleEncoding: cancelTitleEncoding,
@@ -675,5 +743,8 @@
             updateTitleEncodingStatusDisplay();
         }
     };
+    
+    // Export deleteOutputFile globally for onclick handler
+    window.deleteOutputFile = deleteOutputFile;
     
 })();

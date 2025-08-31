@@ -222,6 +222,15 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 elif job_key in queued_job_ids:
                     job_data['job_id'] = queued_job_ids[job_key]
                 
+                # For completed jobs, add current file size if output file exists
+                if job.status == EncodingStatus.COMPLETED and job.output_path:
+                    try:
+                        if os.path.exists(job.output_path):
+                            file_size_bytes = os.path.getsize(job.output_path)
+                            job_data['output_size_bytes'] = file_size_bytes
+                    except Exception as e:
+                        logger.warning(f"Could not get file size for {job.output_path}: {e}")
+                
                 if job.status == EncodingStatus.ENCODING:
                     status_groups['encoding'].append(job_data)
                 elif job.status == EncodingStatus.QUEUED:
