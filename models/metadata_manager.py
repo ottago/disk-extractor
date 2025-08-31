@@ -222,6 +222,9 @@ class MovieMetadataManager:
         except OSError as e:
             raise MetadataError(f"Invalid directory: {e}")
         
+        # Diagnostic logging for mount point
+        self._log_directory_diagnostics()
+        
         # Start watching the new directory
         # NKW if file_watcher.start_watching(self.directory):
         # NKW     logger.info(f"Started file watching for: {self.directory}")
@@ -229,6 +232,50 @@ class MovieMetadataManager:
         # NKW     logger.warning(f"Failed to start file watching for: {self.directory}")
 
         self.scan_directory()
+    
+    def _log_directory_diagnostics(self) -> None:
+        """Log diagnostic information about the directory mount point"""
+        if not self.directory:
+            return
+            
+        logger.info(f"=== DIRECTORY DIAGNOSTICS ===")
+        logger.info(f"Directory path: {self.directory}")
+        logger.info(f"Resolved path: {self.directory.resolve()}")
+        logger.info(f"Exists: {self.directory.exists()}")
+        logger.info(f"Is directory: {self.directory.is_dir()}")
+        
+        try:
+            stat = self.directory.stat()
+            logger.info(f"Permissions: {oct(stat.st_mode)[-3:]}")
+            logger.info(f"Owner UID: {stat.st_uid}")
+            logger.info(f"Group GID: {stat.st_gid}")
+            logger.info(f"Size: {stat.st_size} bytes")
+        except OSError as e:
+            logger.error(f"Error getting directory stats: {e}")
+        
+        # Check current process info
+        logger.info(f"Current process UID: {os.getuid()}")
+        logger.info(f"Current process GID: {os.getgid()}")
+        
+        # Test read access
+        try:
+            list(self.directory.iterdir())
+            logger.info("Directory is readable")
+        except PermissionError:
+            logger.error("Directory is NOT readable - permission denied")
+        except OSError as e:
+            logger.error(f"Error reading directory: {e}")
+        
+        # Count .img files
+        try:
+            img_files = list(self.directory.glob("*.img"))
+            logger.info(f"Found {len(img_files)} .img files")
+            if img_files:
+                logger.info(f"First few .img files: {[f.name for f in img_files[:3]]}")
+        except OSError as e:
+            logger.error(f"Error scanning for .img files: {e}")
+        
+        logger.info(f"=== END DIAGNOSTICS ===")
     
     def scan_directory(self) -> None:
         """Scan directory for .img files and their metadata"""
