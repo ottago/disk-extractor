@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, Response
 from typing import Dict, Any, Union, List
 
 from models.encoding_engine import EncodingEngine
-from models.encoding_models import EncodingSettings, EncodingStatus, ExtendedMetadata
+from models.encoding_models import EncodingSettings, EncodingStatus, EncodingJob, ExtendedMetadata
 from utils.validation import validate_filename, ValidationError
 from utils.json_helpers import prepare_for_template
 
@@ -192,6 +192,33 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
         """Get status of all encoding jobs"""
         try:
             jobs = encoding_engine.get_all_jobs()
+            
+            # Also get history entries and convert recent completed ones to job-like format
+            if encoding_engine.metadata_manager:
+                for movie in encoding_engine.metadata_manager.movies:
+                    try:
+                        metadata = encoding_engine.metadata_manager.load_metadata(movie['file_name'])
+                        history_entries = ExtendedMetadata.get_encoding_history(metadata)
+                        
+                        # Convert recent completed history entries to job format for display
+                        for entry in history_entries:
+                            if entry.status == EncodingStatus.COMPLETED:
+                                # Create a job-like object from history entry
+                                history_job = EncodingJob(
+                                    file_name=entry.file_name,
+                                    title_number=entry.title_number,
+                                    movie_name=entry.movie_name,
+                                    output_filename=entry.output_filename,
+                                    preset_name=entry.preset_name,
+                                    status=entry.status,
+                                    created_at=entry.started_at,
+                                    started_at=entry.started_at,
+                                    completed_at=entry.completed_at,
+                                    output_path=entry.output_path
+                                )
+                                jobs.append(history_job)
+                    except Exception as e:
+                        logger.warning(f"Error loading history for {movie['file_name']}: {e}")
             
             # Group jobs by status
             status_groups = {
