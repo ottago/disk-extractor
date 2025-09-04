@@ -600,8 +600,8 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Internal server error: {str(e)}'
             }), 500
     
-    @bp.route('/delete-file', methods=['POST'])
-    def delete_encoded_file() -> Union[Response, tuple]:
+    @bp.route('/delete_output', methods=['POST'])
+    def delete_output_file() -> Union[Response, tuple]:
         """Delete an encoded file and reset its encoding status"""
         logger.info("Delete encoded file endpoint called")
         try:
@@ -858,5 +858,74 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
             }), 500
+    
+    @bp.route('/delete_output', methods=['POST'])
+    def delete_output_file() -> Union[Response, tuple]:
+        """Delete an output file and remove from history"""
+        logger.info("=== DELETE OUTPUT ENDPOINT CALLED ===")
+        try:
+            data = request.get_json()
+            logger.info(f"Received delete_output data: {data}")
+            
+            if not data:
+                logger.warning("No data provided to delete_output")
+                return jsonify({'success': False, 'error': 'No data provided'}), 400
+            
+            file_name = data.get('file_name')
+            title_number = data.get('title_number')
+            output_file = data.get('output_file')
+            
+            if not all([file_name, title_number is not None, output_file]):
+                return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            
+            # Find and delete the output file from history
+            if encoding_engine.metadata_manager:
+                try:
+                    metadata = encoding_engine.metadata_manager.load_metadata(file_name)
+                    history_entries = ExtendedMetadata.get_encoding_history(metadata)
+                    
+                    # Find the history entry to remove
+                    updated_history = []
+                    file_deleted = False
+                    
+                    for entry in history_entries:
+                        if (entry.file_name == file_name and 
+                            entry.title_number == title_number and
+                            entry.output_filename == output_file):
+                            
+                            # Delete the actual file if it exists
+                            if entry.output_path and os.path.exists(entry.output_path):
+                                try:
+                                    os.remove(entry.output_path)
+                                    logger.info(f"Deleted output file: {entry.output_path}")
+                                    file_deleted = True
+                                except Exception as e:
+                                    logger.warning(f"Could not delete file {entry.output_path}: {e}")
+                            
+                            # Skip this entry (remove from history)
+                            continue
+                        else:
+                            updated_history.append(entry)
+                    
+                    # Update metadata with new history
+                    metadata = ExtendedMetadata.ensure_encoding_structure(metadata)
+                    metadata['encoding']['history'] = [entry.to_dict() for entry in updated_history]
+                    encoding_engine.metadata_manager.save_metadata(file_name, metadata)
+                    
+                    return jsonify({
+                        'success': True,
+                        'file_deleted': file_deleted,
+                        'message': 'Output file removed from history' + (' and deleted from disk' if file_deleted else '')
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Error deleting output file: {e}")
+                    return jsonify({'success': False, 'error': str(e)}), 500
+            
+            return jsonify({'success': False, 'error': 'Metadata manager not available'}), 500
+            
+        except Exception as e:
+            logger.error(f"Error in delete_output_file: {e}")
+            return jsonify({'success': False, 'error': 'Internal server error'}), 500
     
     return bp
