@@ -52,6 +52,7 @@ RUN apt-get update && apt-get install -y \
     # DVD support
     libdvdread-dev \
     libdvdnav-dev \
+    libdvdcss-dev \
     # Hardware acceleration
     libva-dev \
     libdrm-dev \
@@ -79,15 +80,6 @@ RUN git clone --branch ${HANDBRAKE_VERSION} --depth 1 https://github.com/HandBra
         --enable-qsv && \
     # Build HandBrake (this will take a while)
     cd build && \
-    make -j$(nproc) && \
-    make install
-
-# Build libdvdcss for encrypted DVD support
-WORKDIR /tmp
-RUN git clone https://code.videolan.org/videolan/libdvdcss.git && \
-    cd libdvdcss && \
-    autoreconf -fiv && \
-    ./configure --prefix=/opt/handbrake && \
     make -j$(nproc) && \
     make install
 
@@ -137,6 +129,7 @@ RUN apt-get update && apt-get install -y \
     # DVD support libraries
     libdvdread8 \
     libdvdnav4 \
+    libdvdcss2 \
     # Hardware acceleration libraries
     libva-drm2 \
     libdrm2 \
