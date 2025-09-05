@@ -204,6 +204,7 @@ def check_security() -> Optional[Response]:
         # Check for path traversal attempts
         if check_path_traversal(request.path):
             log_security_event("Path traversal attempt", request.path, request.remote_addr)
+            logger.warning(f"Blocked path traversal attempt: {request.path}")
             return jsonify({
                 'success': False,
                 'error': 'Invalid filename: path traversal detected'
@@ -223,6 +224,63 @@ def handle_404(error) -> Union[Response, tuple]:
     
     # For non-API endpoints, return normal 404
     return error
+
+
+@app.route('/api/encoding/download/<filename>')
+def download_output_file(filename: str) -> Union[Response, tuple]:
+    """Download an output file"""
+    try:
+        from flask import send_file
+        import os
+        
+        logger.info(f"Download request for file: {filename}")
+        
+        # Validate filename to prevent path traversal
+        if '..' in filename or filename.startswith('/') or '/' in filename:
+            logger.warning(f"Invalid filename rejected: {filename}")
+            return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+        
+        # Get the movies directory from metadata manager
+        if not manager or not manager.directory:
+            logger.error("Movies directory not configured")
+            return jsonify({'success': False, 'error': 'Movies directory not configured'}), 500
+        
+        # Search for the file in encoding history to get the correct path
+        file_path = None
+        for movie in manager.movies:
+            metadata = manager.load_metadata(movie['file_name'])
+            if metadata and 'encoding' in metadata and 'jobs' in metadata['encoding']:
+                for job in metadata['encoding']['jobs']:
+                    if job.get('output_filename') == filename and job.get('output_path'):
+                        file_path = job['output_path']
+                        break
+                if file_path:
+                    break
+        
+        if not file_path:
+            # Fallback to looking in root movies directory
+            file_path = os.path.join(str(manager.directory), filename)
+        
+        logger.info(f"Looking for file at: {file_path}")
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.warning(f"File not found: {file_path}")
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+        
+        # Ensure the resolved path is still within the movies directory (security check)
+        movies_dir = os.path.realpath(str(manager.directory))
+        resolved_path = os.path.realpath(file_path)
+        if not resolved_path.startswith(movies_dir):
+            logger.warning(f"Access denied for path: {resolved_path}")
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        logger.info(f"Serving file: {resolved_path}")
+        return send_file(file_path, as_attachment=True, download_name=filename)
+        
+    except Exception as e:
+        logger.error(f"Error downloading file {filename}: {e}")
+        return jsonify({'success': False, 'error': 'Download failed'}), 500
 
 
 # Main routes
@@ -371,6 +429,12 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     # Register encoding API routes
     encoding_bp = create_encoding_routes(manager, encoding_engine)
     app.register_blueprint(encoding_bp)
+    
+    # Debug: Print registered routes
+    logger.debug("Registered routes:")
+    for rule in app.url_map.iter_rules():
+        logger.debug(f"  {rule.rule} -> {rule.endpoint}")
+    
     
     # Register settings API routes
     settings_bp = create_settings_routes(encoding_engine, socketio)

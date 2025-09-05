@@ -928,4 +928,45 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
             logger.error(f"Error in delete_output_file: {e}")
             return jsonify({'success': False, 'error': 'Internal server error'}), 500
     
+    @bp.route('/download/<filename>')
+    def download_output_file(filename: str) -> Union[Response, tuple]:
+        """Download an output file"""
+        try:
+            from flask import send_file
+            import os
+            
+            logger.info(f"Download request for file: {filename}")
+            
+            # Validate filename to prevent path traversal
+            if '..' in filename or filename.startswith('/') or '/' in filename:
+                logger.warning(f"Invalid filename rejected: {filename}")
+                return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+            
+            # Get the movies directory from metadata manager
+            if not encoding_engine.metadata_manager or not encoding_engine.metadata_manager.directory:
+                logger.error("Movies directory not configured")
+                return jsonify({'success': False, 'error': 'Movies directory not configured'}), 500
+            
+            file_path = os.path.join(str(encoding_engine.metadata_manager.directory), filename)
+            logger.info(f"Looking for file at: {file_path}")
+            
+            # Check if file exists and is within the movies directory
+            if not os.path.exists(file_path):
+                logger.warning(f"File not found: {file_path}")
+                return jsonify({'success': False, 'error': 'File not found'}), 404
+            
+            # Ensure the resolved path is still within the movies directory (security check)
+            movies_dir = os.path.realpath(str(encoding_engine.metadata_manager.directory))
+            resolved_path = os.path.realpath(file_path)
+            if not resolved_path.startswith(movies_dir):
+                logger.warning(f"Access denied for path: {resolved_path}")
+                return jsonify({'success': False, 'error': 'Access denied'}), 403
+            
+            logger.info(f"Serving file: {resolved_path}")
+            return send_file(file_path, as_attachment=True, download_name=filename)
+            
+        except Exception as e:
+            logger.error(f"Error downloading file {filename}: {e}")
+            return jsonify({'success': False, 'error': 'Download failed'}), 500
+    
     return bp

@@ -1612,11 +1612,14 @@ function updateTitleEncodingStatus(titleNumber, allJobs) {
                 fileSizeInfo = 'Calculating...';
                 // Request file size asynchronously
                 getOutputFileSize(outputPath).then(size => {
-                    if (size) {
-                        const sizeElement = document.querySelector(`#encoding-status-${titleNumber} .file-size-info`);
-                        if (sizeElement) {
+                    const sizeElement = document.querySelector(`#encoding-status-${titleNumber} .file-size-info`);
+                    if (sizeElement) {
+                        if (size) {
                             sizeElement.textContent = formatFileSize(size);
-                        }
+			}
+			else {
+                            sizeElement.textContent = '***';
+			}
                     }
                 });
             }

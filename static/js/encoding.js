@@ -553,7 +553,7 @@
             const sizeText = job.output_size_bytes ? ` (${formatFileSize(job.output_size_bytes)})` : '';
             outputDiv.innerHTML = `
                 <div class="output-file-row">
-                    <span class="output-file-name">${outputFile}${sizeText}</span>
+                    <a href="/api/encoding/download/${encodeURIComponent(outputFile)}" class="output-file-link" download="${outputFile}">${outputFile}</a>${sizeText}
                     <button class="delete-output-btn" onclick="deleteOutputFile('${selectedFile}', ${titleNumber}, '${outputFile}')">×</button>
                 </div>
             `;
