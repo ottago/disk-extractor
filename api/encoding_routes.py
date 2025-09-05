@@ -545,27 +545,6 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Internal server error: {str(e)}'
             }), 500
     
-    @bp.route('/test-endpoint', methods=['POST'])
-    def test_endpoint() -> Union[Response, tuple]:
-        """Test endpoint to debug the issue"""
-        logger.info("Test endpoint called")
-        try:
-            data = request.get_json()
-            logger.info(f"Received data: {data}")
-            
-            return jsonify({
-                'success': True,
-                'message': 'Test endpoint working',
-                'received_data': data
-            })
-            
-        except Exception as e:
-            logger.error(f"Error in test endpoint: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Internal server error: {str(e)}'
-            }), 500
-    
     @bp.route('/output-file-size', methods=['POST'])
     def get_output_file_size() -> Union[Response, tuple]:
         """Get the size of an output file"""
@@ -935,8 +914,6 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
             from flask import send_file
             import os
             
-            logger.info(f"Download request for file: {filename}")
-            
             # Validate filename to prevent path traversal
             if '..' in filename or filename.startswith('/') or '/' in filename:
                 logger.warning(f"Invalid filename rejected: {filename}")
@@ -948,7 +925,7 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
                 return jsonify({'success': False, 'error': 'Movies directory not configured'}), 500
             
             file_path = os.path.join(str(encoding_engine.metadata_manager.directory), filename)
-            logger.info(f"Looking for file at: {file_path}")
+            logger.debug(f"Looking for file at: {file_path}")
             
             # Check if file exists and is within the movies directory
             if not os.path.exists(file_path):
