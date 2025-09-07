@@ -565,7 +565,7 @@
     // Delete output file with confirmation
     function deleteOutputFile(fileName, titleNumber, outputFile) {
         if (confirm(`Delete output file: ${outputFile}?`)) {
-            fetch('/api/delete_output', {
+            fetch('/api/encoding/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

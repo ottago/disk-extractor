@@ -813,9 +813,10 @@ class EncodingEngine:
                 if job.output_path and os.path.exists(job.output_path):
                     try:
                         file_size = os.path.getsize(job.output_path)
-                        # Store file size in job progress for easy access
-                        job.progress.output_size_mb = file_size / (1024 * 1024)  # Convert to MB
-                        logger.info(f"Output file size: {file_size} bytes ({job.progress.output_size_mb:.2f} MB)")
+                        # Store file size in both job and progress for easy access
+                        job.output_size_mb = file_size / (1024 * 1024)  # Convert to MB
+                        job.progress.output_size_mb = job.output_size_mb
+                        logger.info(f"Output file size: {file_size} bytes ({job.output_size_mb:.2f} MB)")
                     except Exception as e:
                         logger.warning(f"Could not get output file size for {job.output_path}: {e}")
                 

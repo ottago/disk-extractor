@@ -75,6 +75,7 @@ class EncodingJob:
     error_message: str = ""
     failure_logs: List[str] = None  # Last 100 lines of output when job fails
     output_path: str = ""
+    output_size_mb: float = 0.0  # Size of output file in MB
     
     def __post_init__(self):
         """Initialize default values"""
