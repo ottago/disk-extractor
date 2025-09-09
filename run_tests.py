@@ -157,6 +157,16 @@ def run_all_tests(verbosity: int = 2) -> bool:
         return False
     
     print(f"Found {suite.countTestCases()} test(s)")
+    
+    # List test modules found
+    test_modules = set()
+    for test_group in suite:
+        for test_case in test_group:
+            if hasattr(test_case, '_testMethodName'):
+                module_name = test_case.__class__.__module__.split('.')[-1]
+                test_modules.add(module_name)
+    
+    print(f"Test modules: {', '.join(sorted(test_modules))}")
     print()
     
     # Run tests
