@@ -21,7 +21,10 @@ class TestTemplateManager(unittest.TestCase):
         """Set up test environment"""
         self.temp_dir = tempfile.mkdtemp()
         self.temp_path = Path(self.temp_dir)
-        self.manager = TemplateManager(self.temp_dir)
+        self.manager = TemplateManager()
+        
+        # Override the template directory for testing
+        self.manager.template_dir = self.temp_path
     
     def tearDown(self):
         """Clean up test environment"""

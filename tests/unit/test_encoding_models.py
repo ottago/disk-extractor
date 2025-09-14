@@ -245,19 +245,26 @@ class TestExtendedMetadata(unittest.TestCase):
         self.assertIn('jobs', result['encoding'])
         self.assertIn('history', result['encoding'])
     
-    def test_add_encoding_job(self):
-        """Test adding encoding job to metadata"""
+    def test_get_encoding_jobs(self):
+        """Test getting encoding jobs from metadata"""
         metadata = ExtendedMetadata.get_default_structure("test.img")
+        
+        # Add a job manually to the structure
         job_data = {
-            'job_id': 'test_123',
+            'file_name': 'test.img',
             'title_number': 1,
+            'movie_name': 'Test Movie',
+            'output_filename': 'Test Movie.mp4',
+            'preset_name': 'Fast 1080p30',
+            'job_id': 'test_123',
             'status': 'queued'
         }
+        metadata['encoding']['jobs'].append(job_data)
         
-        result = ExtendedMetadata.add_encoding_job(metadata, job_data)
+        jobs = ExtendedMetadata.get_encoding_jobs(metadata)
         
-        self.assertEqual(len(result['encoding']['jobs']), 1)
-        self.assertEqual(result['encoding']['jobs'][0]['job_id'], 'test_123')
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0].job_id, 'test_123')
 
 
 if __name__ == '__main__':

@@ -15,6 +15,12 @@ from io import StringIO
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+RED = '\033[91m'
+RESET = '\033[0m'
+
+
 
 class ColoredTextTestResult(unittest.TextTestResult):
     """Test result class with colored output"""
@@ -28,25 +34,25 @@ class ColoredTextTestResult(unittest.TextTestResult):
         super().addSuccess(test)
         self.success_count += 1
         if self.verbosity > 1:
-            self.stream.write("✓ PASS: ")
+            self.stream.write(f"{GREEN}✓ PASS{RESET}: ")
             self.stream.writeln(self.getDescription(test))
     
     def addError(self, test, err):
         super().addError(test, err)
         if self.verbosity > 1:
-            self.stream.write("❌ ERROR: ")
+            self.stream.write(f"{RED}❌ ERROR{RESET}: ")
             self.stream.writeln(self.getDescription(test))
     
     def addFailure(self, test, err):
         super().addFailure(test, err)
         if self.verbosity > 1:
-            self.stream.write("❌ FAIL: ")
+            self.stream.write(f"{RED}❌ FAIL{RESET}: ")
             self.stream.writeln(self.getDescription(test))
     
     def addSkip(self, test, reason):
         super().addSkip(test, reason)
         if self.verbosity > 1:
-            self.stream.write("⚠️  SKIP: ")
+            self.stream.write(f"{YELLOW}⚠️  SKIP{RESET}: ")
             self.stream.writeln(f"{self.getDescription(test)} ({reason})")
 
 
@@ -70,21 +76,21 @@ class ColoredTextTestRunner(unittest.TextTestRunner):
         skipped = len(result.skipped)
         
         print(f"Total Tests: {total_tests}")
-        print(f"✓ Passed: {successes}")
+        print(f"{GREEN}✓ Passed: {successes}{RESET}")
         if failures > 0:
-            print(f"❌ Failed: {failures}")
+            print(f"{RED}❌ Failed: {failures}{RESET}")
         if errors > 0:
-            print(f"❌ Errors: {errors}")
+            print(f"{RED}❌ Errors: {errors}{RESET}")
         if skipped > 0:
-            print(f"⚠️  Skipped: {skipped}")
+            print(f"{YELLOW}⚠️  Skipped: {skipped}{RESET}")
         
         success_rate = (successes / total_tests * 100) if total_tests > 0 else 0
         print(f"Success Rate: {success_rate:.1f}%")
         
         if result.wasSuccessful():
-            print("\n🎉 ALL TESTS PASSED!")
+            print("\n{GREEN}🎉 ALL TESTS PASSED!{RESET}")
         else:
-            print(f"\n❌ {failures + errors} TEST(S) FAILED")
+            print(f"\n{RED}❌ {failures + errors} TEST(S) FAILED{RESET}")
             
             if result.failures:
                 print("\n📋 FAILURES:")
@@ -133,7 +139,7 @@ def run_specific_test(test_name: str) -> None:
         runner = ColoredTextTestRunner(verbosity=2)
         runner.run(suite)
     except Exception as e:
-        print(f"❌ Error running test '{test_name}': {e}")
+        print(f"{RED}❌ Error running test '{test_name}': {e}{RESET}")
 
 
 def run_all_tests(verbosity: int = 2) -> bool:
