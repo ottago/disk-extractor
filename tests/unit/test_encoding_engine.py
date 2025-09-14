@@ -28,6 +28,7 @@ class TestEncodingEngine(unittest.TestCase):
         # Create mock metadata manager
         self.mock_manager = Mock(spec=MovieMetadataManager)
         self.mock_manager.directory = self.temp_path
+        self.mock_manager.movies = []  # Initialize empty movies list
         
         self.engine = EncodingEngine(self.mock_manager)
     
@@ -62,7 +63,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -77,7 +77,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -94,7 +93,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -111,7 +109,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie 1",
-            output_filename="Test Movie 1.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -119,7 +116,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=2,
             movie_name="Test Movie 2",
-            output_filename="Test Movie 2.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -133,7 +129,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -151,7 +146,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -168,7 +162,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -193,7 +186,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test.img",
             title_number=1,
             movie_name="Test Movie",
-            output_filename="Test Movie.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -216,7 +208,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test1.img",
             title_number=1,
             movie_name="Test Movie 1",
-            output_filename="Test Movie 1.mp4",
             preset_name="Fast 1080p30"
         )
         
@@ -224,7 +215,6 @@ class TestEncodingEngine(unittest.TestCase):
             file_name="test2.img",
             title_number=1,
             movie_name="Test Movie 2",
-            output_filename="Test Movie 2.mp4",
             preset_name="Fast 1080p30"
         )
         

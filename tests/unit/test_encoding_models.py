@@ -177,13 +177,13 @@ class TestEncodingSettings(unittest.TestCase):
         """Test default settings values"""
         settings = EncodingSettings()
         
-        self.assertEqual(settings.max_concurrent_encodes, 1)
+        self.assertEqual(settings.max_concurrent_encodes, 2)
         self.assertFalse(settings.testing_mode)
-        self.assertEqual(settings.test_duration_seconds, 30)
-        self.assertEqual(settings.output_directory, "/movies")
+        self.assertEqual(settings.test_duration_seconds, 60)
+        self.assertEqual(settings.output_directory, "")
         self.assertEqual(settings.default_preset, "Fast 1080p30")
         self.assertFalse(settings.auto_queue_new_files)
-        self.assertEqual(settings.progress_update_interval, 1)
+        self.assertEqual(settings.progress_update_interval, 3)
     
     def test_to_dict(self):
         """Test converting settings to dictionary"""
