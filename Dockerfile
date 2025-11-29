@@ -151,36 +151,8 @@ ENV DVDCSS_CACHE="/tmp/dvdcss"
 ENV DVDCSS_METHOD="key"
 ENV DVDCSS_VERBOSE="0"
 
-# Create HandBrakeCLI wrapper script for better error handling and debugging
-RUN cat > /usr/local/bin/HandBrakeCLI <<'EOF'
-#!/bin/bash
-set -e
-
-HANDBRAKE_CLI="/opt/handbrake/bin/HandBrakeCLI"
-
-if [ ! -f "$HANDBRAKE_CLI" ]; then
-    echo "Error: HandBrakeCLI not found at $HANDBRAKE_CLI" >&2
-    exit 1
-fi
-
-# Create DVD CSS cache directory if it doesn't exist
-mkdir -p "$DVDCSS_CACHE"
-
-# Debug mode
-if [ "$1" = "--debug" ]; then
-    echo "Using HandBrakeCLI: $HANDBRAKE_CLI" >&2
-    echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >&2
-    echo "PATH=$PATH" >&2
-    echo "DVDCSS_CACHE=$DVDCSS_CACHE" >&2
-    echo "Checking library dependencies..." >&2
-    ldd "$HANDBRAKE_CLI" 2>&1 | head -20 >&2 || echo "ldd failed" >&2
-    shift
-fi
-
-# Run HandBrakeCLI
-exec "$HANDBRAKE_CLI" "$@"
-EOF
-
+# Copy HandBrakeCLI wrapper script
+COPY HandBrakeCLI /usr/local/bin/HandBrakeCLI
 RUN chmod +x /usr/local/bin/HandBrakeCLI
 
 # Verify HandBrake installation
