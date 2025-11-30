@@ -7,12 +7,13 @@ services:
         USER_ID: 1000  # Change to your desired UID
         GROUP_ID: 1000 # Change to your desired GID
     container_name: disk-extractor
+    runtime: nvidia
     ports:
       - "5000:5000"
     volumes:
       # EDIT THIS: Change the path before the colon to your movie directory
       #- /path/to/your/movies:/movies
-      - /mnt/md0/offline/media/ToBeEncoded:/movies
+      - /data/brick/Star_Trek:/movies
       
       # Persistent settings directory
       - ./settings:/app/settings
@@ -23,6 +24,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=DEBUG
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     # Automatically start with the mounted directory
     command: ["python3", "app.py", "/movies"]
     restart: unless-stopped
