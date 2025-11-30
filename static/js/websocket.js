@@ -230,7 +230,7 @@
         if (overlay) {
             overlay.classList.add('hidden');
             // Re-enable all interactive elements
-            document.body.style.pointerEvents = 'auto';
+            document.body.style.pointerEvents = '';
         }
     }
 
@@ -238,8 +238,5 @@
     window.initializeWebSocket = initializeWebSocket;
     window.showDisconnectionOverlay = showDisconnectionOverlay;
     window.hideDisconnectionOverlay = hideDisconnectionOverlay;
-
-    // Initialize with disconnection overlay shown
-    showDisconnectionOverlay();
 
 })();

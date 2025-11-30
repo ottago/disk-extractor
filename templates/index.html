@@ -38,7 +38,16 @@
             <div class="sidebar-content">
                 <ul class="file-list" id="fileList">
                     {% for movie in movies %}
-                    <li class="file-item" data-filename="{{ movie.file_name }}" data-movie-index="{{ loop.index0 }}">
+                    <li class="file-item {% if movie.has_metadata %}has-metadata{% else %}no-metadata{% endif %}" 
+                        data-filename="{{ movie.file_name }}" 
+                        data-movie-index="{{ loop.index0 }}">
+                        <div class="file-name">
+                            <span class="status-indicator {% if movie.has_metadata %}has-metadata{% else %}no-metadata{% endif %}"></span>
+                            {{ movie.file_name }}
+                        </div>
+                        <div class="file-info">
+                            {{ "%.1f"|format(movie.size_mb) }} MB
+                        </div>
                     </li>
                     {% endfor %}
                 </ul>

@@ -11,27 +11,19 @@
             initializeApp(movies);
         }
         
-        // After initialization, populate the file list with centralized formatting
-        setTimeout(function() {
-            console.log('Populating file list with centralized formatting for', movies.length, 'movies');
-            
-            const fileListItems = document.querySelectorAll('#fileList .file-item');
-            console.log('Found', fileListItems.length, 'file list items');
-            
-            fileListItems.forEach((item, index) => {
-                const movieIndex = parseInt(item.dataset.movieIndex);
-                const movie = movies[movieIndex];
-                if (movie) {
-                    console.log('Populating item', index, 'with movie:', movie.file_name);
-                    populateFileListItem(item, movie);
-                } else {
-                    console.warn('No movie data for item', index);
-                }
-            });
-            
-            // Store movies data globally
-            window.moviesData = movies;
-        }, 50); // Small delay to let original initialization complete
+        // Attach click handlers to file list items
+        const fileListItems = document.querySelectorAll('#fileList .file-item');
+        console.log('Found', fileListItems.length, 'file list items');
+        
+        fileListItems.forEach((item) => {
+            const filename = item.dataset.filename;
+            if (filename) {
+                item.onclick = () => selectFile(filename);
+            }
+        });
+        
+        // Store movies data globally
+        window.moviesData = movies;
     }
 
     // Show notification
