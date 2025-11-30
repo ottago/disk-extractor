@@ -30,7 +30,7 @@ class Config:
     CACHE_TTL: int = int(os.getenv('CACHE_TTL', 3600))  # 1 hour
     
     # File settings
-    ALLOWED_EXTENSIONS: List[str] = ['.img']
+    ALLOWED_EXTENSIONS: List[str] = ['.img', '.mkv']
     MAX_FILENAME_LENGTH: int = 255
     MAX_SYNOPSIS_LENGTH: int = 5000
     MAX_MOVIE_NAME_LENGTH: int = 1000

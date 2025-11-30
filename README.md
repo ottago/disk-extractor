@@ -1,12 +1,12 @@
 # Disk Extractor - Movie Metadata Manager
 
-A modern web-based application for managing movie metadata and encoding .img movie files with HandBrake integration, real-time WebSocket updates, and comprehensive encoding queue management.
+A modern web-based application for managing movie metadata and encoding media files (.img, .mkv) with HandBrake integration, real-time WebSocket updates, and comprehensive encoding queue management.
 
 ## Features
 
 ### Core Functionality
 - **Real-time Web Interface**: Modern, responsive UI with WebSocket-based live updates
-- **File Management**: Automatic scanning and monitoring of .img files with file system watcher
+- **File Management**: Automatic scanning and monitoring of media files (.img, .mkv) with file system watcher
 - **Multi-title Support**: Scan and manage multiple titles per disc with individual metadata
 - **Enhanced Metadata**: Rich metadata including audio/subtitle tracks, duration, and technical details
 - **Visual Status Indicators**: Color-coded file status (green=has metadata, red=no metadata)
@@ -256,7 +256,7 @@ services:
 3. Access web interface at http://localhost:5000
 
 ### 2. File Management
-1. Application automatically scans for .img files
+1. Application automatically scans for .img and .mkv files
 2. Files appear in left sidebar with status indicators
 3. Click file to view/edit metadata
 4. Use "Scan Media" to detect titles and tracks

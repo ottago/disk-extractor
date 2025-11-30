@@ -17,7 +17,7 @@ class ValidationError(Exception):
 
 def validate_filename(filename: str) -> str:
     """
-    Validate filename to prevent path traversal and ensure it's a valid .img file
+    Validate filename to prevent path traversal and ensure it's a valid media file
     
     Args:
         filename: The filename to validate
@@ -42,16 +42,19 @@ def validate_filename(filename: str) -> str:
     if '\x00' in filename:
         raise ValidationError("Invalid filename: null byte detected")
     
-    # Ensure it's a valid .img file
-    if not filename.lower().endswith('.img'):
-        raise ValidationError("Invalid filename: only .img files are allowed")
+    # Ensure it's a valid media file with allowed extension
+    if not any(filename.lower().endswith(ext) for ext in Config.ALLOWED_EXTENSIONS):
+        raise ValidationError(f"Invalid filename: only {', '.join(Config.ALLOWED_EXTENSIONS)} files are allowed")
     
     # Check filename length
     if len(filename) > Config.MAX_FILENAME_LENGTH:
         raise ValidationError("Invalid filename: filename too long")
     
-    # Check for valid characters
-    if not all(c in Config.ALLOWED_FILENAME_CHARS for c in filename[:-4]):  # Exclude .img extension
+    # Get extension length for character validation
+    ext_len = len(next(ext for ext in Config.ALLOWED_EXTENSIONS if filename.lower().endswith(ext)))
+    
+    # Check for valid characters (excluding extension)
+    if not all(c in Config.ALLOWED_FILENAME_CHARS for c in filename[:-ext_len]):
         raise ValidationError("Invalid filename: contains invalid characters")
     
     return filename

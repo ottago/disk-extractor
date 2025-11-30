@@ -1,7 +1,7 @@
 """
 File system watcher for Disk Extractor
 
-Monitors directory for changes to .img and .mmm files and notifies the application.
+Monitors directory for changes to media files (.img, .mkv) and .mmm metadata files.
 """
 
 import logging
@@ -42,12 +42,13 @@ class MovieFileHandler(FileSystemEventHandler):
         
         file_path = Path(event.src_path)
         
-        # Only process .img and .mmm files
-        if file_path.suffix.lower() not in ['.img', '.mmm']:
+        # Only process allowed media files and .mmm files
+        allowed_suffixes = [ext.lower() for ext in Config.ALLOWED_EXTENSIONS] + ['.mmm']
+        if file_path.suffix.lower() not in allowed_suffixes:
             return
         
         # Determine file type
-        file_type = 'movie' if file_path.suffix.lower() == '.img' else 'metadata'
+        file_type = 'movie' if file_path.suffix.lower() in Config.ALLOWED_EXTENSIONS else 'metadata'
         
         # Log the event
         logger.debug(f"File system event: {event.event_type} - {file_path} ({file_type})")

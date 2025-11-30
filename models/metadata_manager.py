@@ -1,7 +1,7 @@
 """
 Movie metadata manager for Disk Extractor
 
-Manages movie metadata stored alongside .img files.
+Manages movie metadata stored alongside media files (.img, .mkv).
 """
 
 import os
@@ -129,22 +129,25 @@ class MovieMetadataManager:
     
     def _handle_file_added(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is added"""
-        if file_type == 'movie' and file_path.suffix.lower() == '.img':
+        if file_type == 'movie' and file_path.suffix.lower() in Config.ALLOWED_EXTENSIONS:
             # New movie file added
             logger.info(f"New movie file detected: {file_path.name}")
             # FIXME: Do we really need to rescan the directory when a new file is added?
             self.scan_directory()  # Refresh the entire list
             self._notify_change('added', file_path.name)
         elif file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
-            # New metadata file added
-            movie_filename = file_path.stem + '.img'
-            logger.info(f"New metadata file detected: {file_path.name}")
-            self._refresh_movie_metadata(movie_filename)
-            self._notify_change('metadata_updated', movie_filename)
+            # New metadata file added - find corresponding media file
+            for ext in Config.ALLOWED_EXTENSIONS:
+                movie_filename = file_path.stem + ext
+                if (self.directory / movie_filename).exists():
+                    logger.info(f"New metadata file detected: {file_path.name}")
+                    self._refresh_movie_metadata(movie_filename)
+                    self._notify_change('metadata_updated', movie_filename)
+                    break
     
     def _handle_file_removed(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is removed"""
-        if file_type == 'movie' and file_path.suffix.lower() == '.img':
+        if file_type == 'movie' and file_path.suffix.lower() in Config.ALLOWED_EXTENSIONS:
             # Movie file removed
             logger.info(f"Movie file removed: {file_path.name}")
             self._remove_movie_from_list(file_path.name)
@@ -153,11 +156,14 @@ class MovieMetadataManager:
                 del self.handbrake_cache[file_path.name]
             self._notify_change('removed', file_path.name)
         elif file_type == 'metadata' and file_path.suffix.lower() == '.mmm':
-            # Metadata file removed
-            movie_filename = file_path.stem + '.img'
-            logger.info(f"Metadata file removed: {file_path.name}")
-            self._refresh_movie_metadata(movie_filename)
-            self._notify_change('metadata_updated', movie_filename)
+            # Metadata file removed - find corresponding media file
+            for ext in Config.ALLOWED_EXTENSIONS:
+                movie_filename = file_path.stem + ext
+                if (self.directory / movie_filename).exists():
+                    logger.info(f"Metadata file removed: {file_path.name}")
+                    self._refresh_movie_metadata(movie_filename)
+                    self._notify_change('metadata_updated', movie_filename)
+                    break
     
     def _handle_file_modified(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is modified"""
@@ -168,12 +174,15 @@ class MovieMetadataManager:
                     logger.debug(f"Ignoring modification of {file_path.name} - currently being saved by us")
                     return
             
-            # Metadata file modified
-            movie_filename = file_path.stem + '.img'
-            logger.info(f"Metadata file modified: {file_path.name}")
-            self._refresh_movie_metadata(movie_filename)
-            self._notify_change('metadata_updated', movie_filename)
-        elif file_type == 'movie' and file_path.suffix.lower() == '.img':
+            # Metadata file modified - find corresponding media file
+            for ext in Config.ALLOWED_EXTENSIONS:
+                movie_filename = file_path.stem + ext
+                if (self.directory / movie_filename).exists():
+                    logger.info(f"Metadata file modified: {file_path.name}")
+                    self._refresh_movie_metadata(movie_filename)
+                    self._notify_change('metadata_updated', movie_filename)
+                    break
+        elif file_type == 'movie' and file_path.suffix.lower() in Config.ALLOWED_EXTENSIONS:
             # Movie file modified (size might have changed)
             logger.info(f"Movie file modified: {file_path.name}")
             self._refresh_movie_metadata(file_path.name)
@@ -193,9 +202,9 @@ class MovieMetadataManager:
             for i, movie in enumerate(self.movies):
                 if movie['file_name'] == filename:
                     # Reload metadata for this movie
-                    img_file = self.directory / filename
-                    if img_file.exists():
-                        self.movies[i] = self._load_file_metadata(img_file)
+                    media_file = self.directory / filename
+                    if media_file.exists():
+                        self.movies[i] = self._load_file_metadata(media_file)
                     else:
                         # File no longer exists, remove from list
                         self._remove_movie_from_list(filename)
@@ -266,19 +275,22 @@ class MovieMetadataManager:
         except OSError as e:
             logger.error(f"Error reading directory: {e}")
         
-        # Count .img files
+        # Count media files
         try:
-            img_files = list(self.directory.glob("*.img"))
-            logger.info(f"Found {len(img_files)} .img files")
-            if img_files:
-                logger.info(f"First few .img files: {[f.name for f in img_files[:3]]}")
+            media_files = []
+            for ext in Config.ALLOWED_EXTENSIONS:
+                files = list(self.directory.glob(f"*{ext}"))
+                media_files.extend(files)
+                logger.info(f"Found {len(files)} {ext} files")
+            if media_files:
+                logger.info(f"First few media files: {[f.name for f in media_files[:3]]}")
         except OSError as e:
-            logger.error(f"Error scanning for .img files: {e}")
+            logger.error(f"Error scanning for media files: {e}")
         
         logger.info(f"=== END DIAGNOSTICS ===")
     
     def scan_directory(self) -> None:
-        """Scan directory for .img files and their metadata"""
+        """Scan directory for media files (.img, .mkv) and their metadata"""
         logger.debug(f"Starting scan_directory - directory: {self.directory}")
         
         if not self.directory or not self.directory.exists():
@@ -289,24 +301,26 @@ class MovieMetadataManager:
         self.movies = []
         
         try:
-            img_files = list(self.directory.glob("*.img"))
+            media_files = []
+            for ext in Config.ALLOWED_EXTENSIONS:
+                media_files.extend(self.directory.glob(f"*{ext}"))
         except OSError as e:
             logger.error(f"Error scanning directory {self.directory}: {e}")
             return
         
-        for img_file in img_files:
+        for media_file in media_files:
             try:
-                logger.debug(f"Processing file: {img_file.name}")
-                self.movies.append(self._load_file_metadata(img_file))
+                logger.debug(f"Processing file: {media_file.name}")
+                self.movies.append(self._load_file_metadata(media_file))
             except Exception as e:
-                logger.warning(f"Error loading metadata for {img_file.name}: {e}")
+                logger.warning(f"Error loading metadata for {media_file.name}: {e}")
                 # Add basic metadata even if loading fails
                 self.movies.append({
-                    'file_name': img_file.name,
-                    'movie_name': img_file.stem,
+                    'file_name': media_file.name,
+                    'movie_name': media_file.stem,
                     'release_date': '',
                     'synopsis': '',
-                    'size_mb': self._get_file_size_mb(img_file),
+                    'size_mb': self._get_file_size_mb(media_file),
                     'titles': [],
                     'has_metadata': False
                 })
@@ -317,20 +331,21 @@ class MovieMetadataManager:
         logger.info(f"SCAN COMPLETE: Loaded {len(self.movies)} movies")
 
     
-    def _load_file_metadata(self, img_file: Path) -> Dict[str, Any]:
+    def _load_file_metadata(self, media_file: Path, compute_encoding_status: bool = False) -> Dict[str, Any]:
         """
-        Load metadata for a single .img file
+        Load metadata for a single media file
         
         Args:
-            img_file: Path to the .img file
+            media_file: Path to the media file (.img, .mkv, etc.)
+            compute_encoding_status: Whether to compute encoding status (can cause recursion)
             
         Returns:
             File metadata
         """
-        metadata_file = img_file.with_suffix('.mmm')
+        metadata_file = media_file.with_suffix('.mmm')
         
         # Load metadata using extended structure
-        metadata = ExtendedMetadata.get_default_structure(img_file.name, self._get_file_size_mb(img_file))
+        metadata = ExtendedMetadata.get_default_structure(media_file.name, self._get_file_size_mb(media_file))
         
         if metadata_file.exists():
             try:
@@ -344,7 +359,10 @@ class MovieMetadataManager:
         
         # Add computed fields - use internal logic to avoid recursion
         metadata['has_metadata'] = self._has_meaningful_metadata(metadata)
-        metadata['encoding_status'] = ExtendedMetadata.get_file_encoding_status(metadata).value
+        if compute_encoding_status:
+            metadata['encoding_status'] = ExtendedMetadata.get_file_encoding_status(metadata).value
+        else:
+            metadata['encoding_status'] = 'not_queued'
         
         return metadata
     
@@ -451,23 +469,23 @@ class MovieMetadataManager:
         
         return False
     
-    def get_handbrake_data(self, img_file: str) -> Dict[str, Any]:
+    def get_handbrake_data(self, media_file: str) -> Dict[str, Any]:
         """
         Get HandBrake scan data for a file, with caching
         
         Args:
-            img_file: Filename of the .img file
+            media_file: Filename of the media file
             
         Returns:
             HandBrake scan data
         """
-        if img_file not in self.handbrake_cache:
-            file_path = self.directory / img_file
+        if media_file not in self.handbrake_cache:
+            file_path = self.directory / media_file
             try:
-                self.handbrake_cache[img_file] = HandBrakeScanner.scan_file(str(file_path))
-                logger.info(f"Successfully scanned {img_file}")
+                self.handbrake_cache[media_file] = HandBrakeScanner.scan_file(str(file_path))
+                logger.info(f"Successfully scanned {media_file}")
             except Exception as e:
-                logger.error(f"Failed to scan {img_file}: {e}")
+                logger.error(f"Failed to scan {media_file}: {e}")
                 
                 # Create error cache entry
                 error_cache: Dict[str, Any] = {
@@ -479,9 +497,9 @@ class MovieMetadataManager:
                 if hasattr(e, 'raw_output'):
                     error_cache['_raw_handbrake_output'] = e.raw_output
                 
-                self.handbrake_cache[img_file] = error_cache
+                self.handbrake_cache[media_file] = error_cache
         
-        return self.handbrake_cache[img_file]
+        return self.handbrake_cache[media_file]
     
     def format_duration(self, duration_dict: Dict[str, int]) -> str:
         """
@@ -615,12 +633,12 @@ class MovieMetadataManager:
         
         return suggestions
     
-    def load_metadata(self, img_file: str) -> Dict[str, Any]:
+    def load_metadata(self, media_file: str) -> Dict[str, Any]:
         """
-        Load metadata for the given .img file
+        Load metadata for the given media file
         
         Args:
-            img_file: Filename of the .img file
+            media_file: Filename of the media file
             
         Returns:
             File metadata
@@ -629,22 +647,22 @@ class MovieMetadataManager:
             ValidationError: If filename is invalid
         """
         # Validate filename
-        img_file = validate_filename(img_file)
+        media_file = validate_filename(media_file)
 
         # Ensure the file exists in our directory
-        img_path = self.directory / img_file
-        if not img_path.exists():
-            raise FileNotFoundError(f"File not found: {img_file}")
+        media_path = self.directory / media_file
+        if not media_path.exists():
+            raise FileNotFoundError(f"File not found: {media_file}")
         
         # Convert to Path and use the internal method
-        return self._load_file_metadata(img_path)
+        return self._load_file_metadata(media_path)
     
-    def save_metadata(self, img_file: str, metadata: Dict[str, Any]) -> bool:
+    def save_metadata(self, media_file: str, metadata: Dict[str, Any]) -> bool:
         """
         Save metadata to .mmm file with file locking and atomic writes
         
         Args:
-            img_file: Filename of the .img file
+            media_file: Filename of the media file
             metadata: Metadata to save
             
         Returns:
@@ -654,9 +672,9 @@ class MovieMetadataManager:
             ValidationError: If filename is invalid
         """
         # Validate filename
-        img_file = validate_filename(img_file)
+        media_file = validate_filename(media_file)
         
-        mmm_file = Path(img_file).stem + '.mmm'
+        mmm_file = Path(media_file).stem + '.mmm'
         mmm_path = self.directory / mmm_file
         
         # Get file-specific lock to prevent concurrent writes to the same file
@@ -673,16 +691,16 @@ class MovieMetadataManager:
                 
                 # Update in-memory data
                 for movie in self.movies:
-                    if movie['file_name'] == img_file:
+                    if movie['file_name'] == media_file:
                         movie.update(metadata)
                         movie['has_metadata'] = self._has_meaningful_metadata(metadata)
                         break
                 
-                logger.debug(f"Successfully saved metadata for {img_file}")
+                logger.debug(f"Successfully saved metadata for {media_file}")
                 return True
                 
             except (IOError, UnicodeEncodeError) as e:
-                logger.error(f"Could not save metadata for {img_file}: {e}")
+                logger.error(f"Could not save metadata for {media_file}: {e}")
                 return False
                 
             finally:
@@ -698,12 +716,12 @@ class MovieMetadataManager:
                 timer = threading.Timer(Config.METADATA_SAVE_FEEDBACK_DELAY, remove_from_saving)
                 timer.start()
     
-    def get_enhanced_metadata(self, img_file: str) -> Dict[str, Any]:
+    def get_enhanced_metadata(self, media_file: str) -> Dict[str, Any]:
         """
         Get complete metadata including HandBrake scan data and suggestions
         
         Args:
-            img_file: Filename of the .img file
+            media_file: Filename of the media file
             
         Returns:
             Enhanced metadata with HandBrake data
@@ -713,8 +731,8 @@ class MovieMetadataManager:
             FileNotFoundError: If file not found
         """
         
-        metadata = self.load_metadata(img_file)
-        handbrake_data = self.get_handbrake_data(img_file)
+        metadata = self.load_metadata(media_file)
+        handbrake_data = self.get_handbrake_data(media_file)
         
         # Enhance with HandBrake data and suggestions
         enhanced_titles: List[Dict[str, Any]] = []

@@ -67,10 +67,6 @@ class HandBrakeScanner:
             if not file_path.is_file():
                 raise ValueError(f"Path is not a file: {file_path}")
             
-            # Ensure it's actually an .img file
-            if not str(file_path).lower().endswith('.img'):
-                raise ValueError(f"File is not an .img file: {file_path}")
-            
             # Convert back to string for subprocess
             file_path_str = str(file_path)
             

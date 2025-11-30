@@ -241,17 +241,17 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 else:
                     return jsonify({
                         'success': True,
-                        'message': 'No raw output available (file scanned before raw output saving was implemented)',
+                        'message': 'Raw output not available',
                         'filename': filename,
                         'has_raw_data': False,
-                        'suggestion': 'Use the rescan button to generate raw output data'
+                        'suggestion': 'Rescan the file to capture output'
                     })
             else:
                 return jsonify({
                     'success': False,
                     'error': 'File not scanned yet',
                     'filename': filename,
-                    'suggestion': 'Scan the file first to generate raw output data'
+                    'suggestion': 'Scan the file first'
                 })
                 
         except ValidationError as e:
