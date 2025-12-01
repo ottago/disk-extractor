@@ -103,7 +103,7 @@ def create_directory_routes() -> Blueprint:
             })
             
         except Exception as e:
-            logger.error(f"Error browsing directory: {e}")
+            logger.error(f"Error browsing directory: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'

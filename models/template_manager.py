@@ -125,7 +125,7 @@ class TemplateManager:
                     logger.warning(f"Failed to load template {template_file}: {e}")
                     
         except Exception as e:
-            logger.error(f"Error loading templates: {e}")
+            logger.error(f"Error loading templates: {e}", exc_info=True)
     
     def save_template(self, name: str, template_data: Dict[str, Any]) -> tuple[bool, str]:
         """
@@ -160,15 +160,15 @@ class TemplateManager:
             
         except PermissionError as e:
             error_msg = f"Permission denied: Cannot write to settings directory. Check file permissions."
-            logger.error(f"Permission error saving template {name}: {e}")
+            logger.error(f"Permission error saving template {name}: {e}", exc_info=True)
             return False, error_msg
         except OSError as e:
             error_msg = f"File system error: {str(e)}"
-            logger.error(f"OS error saving template {name}: {e}")
+            logger.error(f"OS error saving template {name}: {e}", exc_info=True)
             return False, error_msg
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}"
-            logger.error(f"Error saving template {name}: {e}")
+            logger.error(f"Error saving template {name}: {e}", exc_info=True)
             return False, error_msg
     
     def delete_template(self, name: str) -> bool:
@@ -197,7 +197,7 @@ class TemplateManager:
             return True
             
         except Exception as e:
-            logger.error(f"Error deleting template {name}: {e}")
+            logger.error(f"Error deleting template {name}: {e}", exc_info=True)
             return False
     
     def get_template(self, name: str) -> Optional[HandBrakeTemplate]:
@@ -416,14 +416,14 @@ class TemplateManager:
             for field in required_fields:
                 if field not in template_data:
                     error_msg = f"Template missing required field: {field}"
-                    logger.error(error_msg)
+                    logger.error(error_msg, exc_info=True)
                     return False, error_msg
             
             # Validate preset name
             name = template_data['PresetName']
             if not isinstance(name, str) or len(name.strip()) == 0:
                 error_msg = "Invalid preset name: must be a non-empty string"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 return False, error_msg
             
             # Check for dangerous settings (basic validation)
@@ -431,14 +431,14 @@ class TemplateManager:
                 encoder = template_data['VideoEncoder']
                 if not isinstance(encoder, str):
                     error_msg = "Invalid video encoder: must be a string"
-                    logger.error(error_msg)
+                    logger.error(error_msg, exc_info=True)
                     return False, error_msg
             
             return True, ""
             
         except Exception as e:
             error_msg = f"Template validation error: {str(e)}"
-            logger.error(error_msg)
+            logger.error(error_msg, exc_info=True)
             return False, error_msg
     
     def extract_metadata_tracks(self, enhanced_metadata: Dict[str, Any], 
@@ -497,7 +497,7 @@ class TemplateManager:
                         break
             
         except Exception as e:
-            logger.error(f"Error extracting metadata tracks: {e}")
+            logger.error(f"Error extracting metadata tracks: {e}", exc_info=True)
         
         return audio_tracks, subtitle_tracks
     
@@ -534,7 +534,7 @@ class TemplateManager:
             return f"{safe_name}.{extension}"
             
         except Exception as e:
-            logger.error(f"Error generating output filename: {e}")
+            logger.error(f"Error generating output filename: {e}", exc_info=True)
             return f"{self._sanitize_filename(movie_name)}.mp4"
     
     def _sanitize_filename(self, filename: str) -> str:

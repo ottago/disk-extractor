@@ -125,7 +125,7 @@ class MovieMetadataManager:
                 self._handle_file_modified(file_path_obj, file_type)
             
         except Exception as e:
-            logger.error(f"Error handling file change: {e}")
+            logger.error(f"Error handling file change: {e}", exc_info=True)
     
     def _handle_file_added(self, file_path: Path, file_type: str) -> None:
         """Handle when a file is added"""
@@ -210,7 +210,7 @@ class MovieMetadataManager:
                         self._remove_movie_from_list(filename)
                     break
         except Exception as e:
-            logger.error(f"Error refreshing metadata for {filename}: {e}")
+            logger.error(f"Error refreshing metadata for {filename}: {e}", exc_info=True)
     
     def set_directory(self, directory: Union[str, Path]) -> None:
         """
@@ -260,7 +260,7 @@ class MovieMetadataManager:
             logger.info(f"Group GID: {stat.st_gid}")
             logger.info(f"Size: {stat.st_size} bytes")
         except OSError as e:
-            logger.error(f"Error getting directory stats: {e}")
+            logger.error(f"Error getting directory stats: {e}", exc_info=True)
         
         # Check current process info
         logger.info(f"Current process UID: {os.getuid()}")
@@ -271,9 +271,9 @@ class MovieMetadataManager:
             list(self.directory.iterdir())
             logger.info("Directory is readable")
         except PermissionError:
-            logger.error("Directory is NOT readable - permission denied")
+            logger.error("Directory is NOT readable - permission denied", exc_info=True)
         except OSError as e:
-            logger.error(f"Error reading directory: {e}")
+            logger.error(f"Error reading directory: {e}", exc_info=True)
         
         # Count media files
         try:
@@ -285,7 +285,7 @@ class MovieMetadataManager:
             if media_files:
                 logger.info(f"First few media files: {[f.name for f in media_files[:3]]}")
         except OSError as e:
-            logger.error(f"Error scanning for media files: {e}")
+            logger.error(f"Error scanning for media files: {e}", exc_info=True)
         
         logger.info(f"=== END DIAGNOSTICS ===")
     
@@ -305,7 +305,7 @@ class MovieMetadataManager:
             for ext in Config.ALLOWED_EXTENSIONS:
                 media_files.extend(self.directory.glob(f"*{ext}"))
         except OSError as e:
-            logger.error(f"Error scanning directory {self.directory}: {e}")
+            logger.error(f"Error scanning directory {self.directory}: {e}", exc_info=True)
             return
         
         for media_file in media_files:
@@ -485,7 +485,7 @@ class MovieMetadataManager:
                 self.handbrake_cache[media_file] = HandBrakeScanner.scan_file(str(file_path))
                 logger.info(f"Successfully scanned {media_file}")
             except Exception as e:
-                logger.error(f"Failed to scan {media_file}: {e}")
+                logger.error(f"Failed to scan {media_file}: {e}", exc_info=True)
                 
                 # Create error cache entry
                 error_cache: Dict[str, Any] = {
@@ -700,7 +700,7 @@ class MovieMetadataManager:
                 return True
                 
             except (IOError, UnicodeEncodeError) as e:
-                logger.error(f"Could not save metadata for {media_file}: {e}")
+                logger.error(f"Could not save metadata for {media_file}: {e}", exc_info=True)
                 return False
                 
             finally:

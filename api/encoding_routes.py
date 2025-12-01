@@ -76,7 +76,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             try:
                 file_name = validate_filename(file_name)
             except ValidationError as e:
-                logger.error(f"Filename validation failed for '{file_name}': {str(e)}")
+                logger.error(f"Filename validation failed for '{file_name}': {str(e, exc_info=True)}")
                 return jsonify({
                     'success': False,
                     'error': f'Invalid filename: {str(e)}'
@@ -88,7 +88,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 if title_number < 1:
                     raise ValueError("Title number must be positive")
             except (ValueError, TypeError) as e:
-                logger.error(f"Title number validation failed for '{title_number}': {str(e)}")
+                logger.error(f"Title number validation failed for '{title_number}': {str(e, exc_info=True)}")
                 return jsonify({
                     'success': False,
                     'error': 'title_number must be a positive integer'
@@ -100,7 +100,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             
             # Check if file exists
             if not metadata_manager.directory:
-                logger.error("No directory configured for metadata manager")
+                logger.error("No directory configured for metadata manager", exc_info=True)
                 return jsonify({
                     'success': False,
                     'error': 'No directory configured'
@@ -108,7 +108,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             
             img_path = metadata_manager.directory / file_name
             if not img_path.exists():
-                logger.error(f"File not found: {img_path}")
+                logger.error(f"File not found: {img_path}", exc_info=True)
                 return jsonify({
                     'success': False,
                     'error': f'File not found: {file_name}'
@@ -157,7 +157,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 }), 404
                 
         except Exception as e:
-            logger.error(f"Error removing job from queue: {e}")
+            logger.error(f"Error removing job from queue: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -181,7 +181,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 }), 404
                 
         except Exception as e:
-            logger.error(f"Error cancelling encoding job: {e}")
+            logger.error(f"Error cancelling encoding job: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -284,7 +284,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             })
             
         except Exception as e:
-            logger.error(f"Error getting encoding status: {e}")
+            logger.error(f"Error getting encoding status: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -309,7 +309,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             })
             
         except Exception as e:
-            logger.error(f"Error getting job progress: {e}")
+            logger.error(f"Error getting job progress: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -344,7 +344,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             })
             
         except Exception as e:
-            logger.error(f"Error getting file encoding jobs: {e}")
+            logger.error(f"Error getting file encoding jobs: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -429,7 +429,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
             })
             
         except Exception as e:
-            logger.error(f"Error in bulk queue operation: {e}")
+            logger.error(f"Error in bulk queue operation: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -478,7 +478,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Invalid filename: {str(e)}'
             }), 400
         except Exception as e:
-            logger.error(f"Error getting failure logs: {e}")
+            logger.error(f"Error getting failure logs: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -539,7 +539,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 'error': f'Invalid filename: {str(e)}'
             }), 400
         except Exception as e:
-            logger.error(f"Error clearing failure: {e}")
+            logger.error(f"Error clearing failure: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -573,7 +573,7 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                 }), 404
                 
         except Exception as e:
-            logger.error(f"Error getting output file size: {e}")
+            logger.error(f"Error getting output file size: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -646,13 +646,13 @@ def create_encoding_routes(metadata_manager, encoding_engine: EncodingEngine) ->
                     })
                     
                 except Exception as e:
-                    logger.error(f"Error deleting output file: {e}")
+                    logger.error(f"Error deleting output file: {e}", exc_info=True)
                     return jsonify({'success': False, 'error': str(e)}), 500
             
             return jsonify({'success': False, 'error': 'Metadata manager not available'}), 500
             
         except Exception as e:
-            logger.error(f"Error in delete_output_file: {e}")
+            logger.error(f"Error in delete_output_file: {e}", exc_info=True)
             return jsonify({'success': False, 'error': 'Internal server error'}), 500
     
     return bp
@@ -681,7 +681,7 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
             })
             
         except Exception as e:
-            logger.error(f"Error getting settings: {e}")
+            logger.error(f"Error getting settings: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -760,7 +760,7 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
                 }), 400
             
         except Exception as e:
-            logger.error(f"Error updating settings: {e}")
+            logger.error(f"Error updating settings: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -780,7 +780,7 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
             
             # Get the movies directory from metadata manager
             if not encoding_engine.metadata_manager or not encoding_engine.metadata_manager.directory:
-                logger.error("Movies directory not configured")
+                logger.error("Movies directory not configured", exc_info=True)
                 return jsonify({'success': False, 'error': 'Movies directory not configured'}), 500
             
             file_path = os.path.join(str(encoding_engine.metadata_manager.directory), filename)
@@ -802,7 +802,7 @@ def create_settings_routes(encoding_engine: EncodingEngine, socketio=None) -> Bl
             return send_file(file_path, as_attachment=True, download_name=filename)
             
         except Exception as e:
-            logger.error(f"Error downloading file {filename}: {e}")
+            logger.error(f"Error downloading file {filename}: {e}", exc_info=True)
             return jsonify({'success': False, 'error': 'Download failed'}), 500
     
     return bp

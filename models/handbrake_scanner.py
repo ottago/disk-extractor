@@ -71,7 +71,7 @@ class HandBrakeScanner:
             file_path_str = str(file_path)
             
         except (OSError, ValueError) as e:
-            logger.error(f"Invalid file path: {e}")
+            logger.error(f"Invalid file path: {e}", exc_info=True)
             raise HandBrakeError(f"Invalid file path: {e}")
         
         filename = file_path.name
@@ -81,13 +81,13 @@ class HandBrakeScanner:
             # Check if HandBrake CLI is available
             if not HandBrakeScanner._check_handbrake_available():
                 error_msg = "HandBrake CLI not found. Please install HandBrake."
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 raise FileNotFoundError(error_msg)
             
             # Check if file is readable
             if not os.access(file_path_str, os.R_OK):
                 error_msg = f"File not readable: {file_path_str}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 raise PermissionError(error_msg)
             
             # Run HandBrake CLI scan - using validated file path
@@ -128,8 +128,8 @@ class HandBrakeScanner:
                     return data
                 except json.JSONDecodeError as e:
                     error_msg = f"HandBrake returned invalid JSON for {filename}: {e}"
-                    logger.error(error_msg)
-                    logger.error(f"Raw HandBrake output: {repr(stdout_decoded[:1000])}")
+                    logger.error(error_msg, exc_info=True)
+                    logger.error(f"Raw HandBrake output: {repr(stdout_decoded[:1000], exc_info=True)}")
                     # Create HandBrakeError with raw output data attached
                     error = HandBrakeError(error_msg)
                     error.raw_output = raw_output_data
@@ -139,7 +139,7 @@ class HandBrakeScanner:
                 error_msg = f"HandBrake scan failed for {filename} (exit code {result.returncode})"
                 if stderr_decoded:
                     error_msg += f": {stderr_decoded.strip()}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 # Create HandBrakeError with raw output data attached
                 error = HandBrakeError(error_msg)
                 error.raw_output = raw_output_data
@@ -147,7 +147,7 @@ class HandBrakeScanner:
                 
         except subprocess.TimeoutExpired:
             error_msg = f"HandBrake scan timed out after {Config.HANDBRAKE_TIMEOUT} seconds for file: {filename}"
-            logger.error(error_msg)
+            logger.error(error_msg, exc_info=True)
             error = TimeoutError(error_msg)
             # Try to attach any partial output if available
             try:
@@ -163,7 +163,7 @@ class HandBrakeScanner:
                 pass
             raise error
         except FileNotFoundError as e:
-            logger.error(f"HandBrake CLI not available: {e}")
+            logger.error(f"HandBrake CLI not available: {e}", exc_info=True)
             error = FileNotFoundError(str(e))
             try:
                 error.raw_output = {
@@ -178,7 +178,7 @@ class HandBrakeScanner:
                 pass
             raise error
         except PermissionError as e:
-            logger.error(f"Permission error: {e}")
+            logger.error(f"Permission error: {e}", exc_info=True)
             error = PermissionError(str(e))
             try:
                 error.raw_output = {
@@ -193,7 +193,7 @@ class HandBrakeScanner:
                 pass
             raise error
         except Exception as e:
-            logger.error(f"Unexpected error scanning {filename}: {e}")
+            logger.error(f"Unexpected error scanning {filename}: {e}", exc_info=True)
             error = HandBrakeError(f"Unexpected error scanning {filename}: {e}")
             try:
                 error.raw_output = {
@@ -364,9 +364,9 @@ class HandBrakeScanner:
             return max(json_objects, key=lambda x: len(str(x)))
         
         # If all methods fail, raise an error with helpful information
-        logger.error(f"Failed to parse HandBrake JSON output. Raw output length: {len(raw_output)}")
-        logger.error(f"Output preview: {repr(raw_output[:500])}")
-        logger.error(f"Output suffix: {repr(raw_output[-200:])}")
+        logger.error(f"Failed to parse HandBrake JSON output. Raw output length: {len(raw_output, exc_info=True)}")
+        logger.error(f"Output preview: {repr(raw_output[:500], exc_info=True)}")
+        logger.error(f"Output suffix: {repr(raw_output[-200:], exc_info=True)}")
         
         raise json.JSONDecodeError(
             f"Could not parse HandBrake JSON output. Tried multiple parsing methods. "

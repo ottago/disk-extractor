@@ -252,7 +252,7 @@ function loadEnhancedMetadata(filename) {
         .catch(error => {
             // Only handle error if we're still on the same file
             if (filename === selectedFile) {
-                console.error('Error loading metadata for', filename, ':', error);
+                console.error('Error loading metadata for', filename, ':', error, error.stack);
                 enhancedMetadata = null;
                 document.getElementById('enhancedMetadata').style.display = 'none';
                 document.getElementById('rawOutputButton').style.display = 'none';
@@ -860,7 +860,7 @@ function saveMetadata() {
         }
     })
     .catch(error => {
-        console.error('Error saving metadata:', error);
+        console.error('Error saving metadata:', error, error.stack);
     });
     
     // Update Add to Queue button since title selection or movie names may have changed
@@ -977,7 +977,7 @@ async function checkStatsSettings() {
             toggleStatsForNerds(enabled);
         }
     } catch (error) {
-        console.error('Error checking stats settings:', error);
+        console.error('Error checking stats settings:', error, error.stack);
     }
 }
 
@@ -1016,7 +1016,7 @@ async function saveStatsForNerdsSetting(enabled) {
             console.error('Failed to save Stats for Nerds setting');
         }
     } catch (error) {
-        console.error('Error saving Stats for Nerds setting:', error);
+        console.error('Error saving Stats for Nerds setting:', error, error.stack);
     }
 }
 
@@ -1070,7 +1070,7 @@ async function updateStats() {
         
         displayStats(healthData, encodingData);
     } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error fetching stats:', error, error.stack);
         displayStatsError(error.message);
     }
 }
@@ -1513,7 +1513,7 @@ async function deleteEncodedFile(filePath, fileName) {
             showAlert(`Error deleting file: ${data.error}`, 'error');
         }
     } catch (error) {
-        console.error('Error deleting file:', error);
+        console.error('Error deleting file:', error, error.stack);
         showAlert('Error deleting file: ' + error.message, 'error');
     }
 }
@@ -1535,7 +1535,7 @@ async function checkEncodingStatusForAllTitles() {
             });
         }
     } catch (error) {
-        console.error('Error checking encoding status:', error);
+        console.error('Error checking encoding status:', error, error.stack);
     }
 }
 
@@ -1689,7 +1689,7 @@ async function getOutputFileSize(outputPath) {
             return null;
         }
     } catch (error) {
-        console.error('Error getting output file size:', error);
+        console.error('Error getting output file size:', error, error.stack);
         return null;
     }
 }
@@ -1754,7 +1754,7 @@ async function viewFailureLogs(fileName, titleNumber) {
             showAlert('Error loading failure logs: ' + data.error, 'error');
         }
     } catch (error) {
-        console.error('Error loading failure logs:', error);
+        console.error('Error loading failure logs:', error, error.stack);
         showAlert('Error loading failure logs: ' + error.message, 'error');
     }
 }
@@ -1779,7 +1779,7 @@ async function clearFailure(fileName, titleNumber) {
             showAlert('Error clearing failure: ' + data.error, 'error');
         }
     } catch (error) {
-        console.error('Error clearing failure:', error);
+        console.error('Error clearing failure:', error, error.stack);
         showAlert('Error clearing failure: ' + error.message, 'error');
     }
 }
@@ -1857,7 +1857,7 @@ async function copyLogsToClipboard() {
         await navigator.clipboard.writeText(logsText);
         showAlert('Logs copied to clipboard', 'success');
     } catch (error) {
-        console.error('Error copying logs:', error);
+        console.error('Error copying logs:', error, error.stack);
         showAlert('Error copying logs to clipboard', 'error');
     }
 }

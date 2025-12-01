@@ -57,7 +57,7 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
             return jsonify({'success': success})
             
         except Exception as e:
-            logger.error(f"Error in save_metadata endpoint: {e}")
+            logger.error(f"Error in save_metadata endpoint: {e}", exc_info=True)
             return jsonify({'success': False, 'error': 'Internal server error'})
     
     @api_bp.route('/file_list')
@@ -73,7 +73,7 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
             movies_data = prepare_for_template(manager.movies)
             return jsonify({'movies': movies_data})
         except Exception as e:
-            logger.error(f"Error in file_list endpoint: {e}")
+            logger.error(f"Error in file_list endpoint: {e}", exc_info=True)
             return jsonify({'success': False, 'error': 'Internal server error'})
     
     @api_bp.route('/scan_file/<filename>')
@@ -152,21 +152,21 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 'filename': filename
             })
         except FileNotFoundError:
-            logger.error(f"File not found: {filename}")
+            logger.error(f"File not found: {filename}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'File not found',
                 'filename': filename
             })
         except PermissionError:
-            logger.error(f"Permission denied: {filename}")
+            logger.error(f"Permission denied: {filename}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'Permission denied',
                 'filename': filename
             })
         except Exception as e:
-            logger.error(f"Error scanning {filename}: {e}")
+            logger.error(f"Error scanning {filename}: {e}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'Internal server error',
@@ -195,21 +195,21 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 'filename': filename
             })
         except FileNotFoundError:
-            logger.error(f"File not found: {filename}")
+            logger.error(f"File not found: {filename}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'File not found',
                 'filename': filename
             })
         except PermissionError:
-            logger.error(f"Permission denied: {filename}")
+            logger.error(f"Permission denied: {filename}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'Permission denied',
                 'filename': filename
             })
         except Exception as e:
-            logger.error(f"Error getting metadata for {filename}: {e}")
+            logger.error(f"Error getting metadata for {filename}: {e}", exc_info=True)
             return jsonify({
                 'success': False, 
                 'error': 'Internal server error',
@@ -262,7 +262,7 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 'filename': filename
             })
         except Exception as e:
-            logger.error(f"Error getting raw output for {filename}: {e}")
+            logger.error(f"Error getting raw output for {filename}: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': 'Internal server error',
@@ -279,7 +279,7 @@ def init_api_routes(manager: MovieMetadataManager) -> Blueprint:
                 'message': 'HandBrake is working' if available else 'HandBrake is not available'
             })
         except Exception as e:
-            logger.error(f"Error testing HandBrake: {e}")
+            logger.error(f"Error testing HandBrake: {e}", exc_info=True)
             return jsonify({
                 'available': False,
                 'message': 'Error testing HandBrake',

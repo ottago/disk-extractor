@@ -84,7 +84,7 @@
             }
             
         } catch (error) {
-            console.error('Error refreshing current movie metadata:', error);
+            console.error('Error refreshing current movie metadata:', error, error.stack);
         }
     }
 

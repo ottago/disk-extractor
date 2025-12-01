@@ -40,7 +40,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
             })
             
         except Exception as e:
-            logger.error(f"Error listing templates: {e}")
+            logger.error(f"Error listing templates: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -86,13 +86,13 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
                 template_data = json.loads(file_content)
                 logger.info(f"JSON parsed successfully. Keys: {list(template_data.keys())}")
             except json.JSONDecodeError as e:
-                logger.error(f"JSON decode error: {e}")
+                logger.error(f"JSON decode error: {e}", exc_info=True)
                 return jsonify({
                     'success': False,
                     'error': f'Invalid JSON format: {str(e)}'
                 }), 400
             except UnicodeDecodeError as e:
-                logger.error(f"Unicode decode error: {e}")
+                logger.error(f"Unicode decode error: {e}", exc_info=True)
                 return jsonify({
                     'success': False,
                     'error': f'Invalid file encoding: {str(e)}'
@@ -167,7 +167,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
                     logger.info(f"Template saved successfully: {sanitized_name}")
                     saved_templates.append(sanitized_name)
                 else:
-                    logger.error(f"Failed to save template: {sanitized_name} - {error_message}")
+                    logger.error(f"Failed to save template: {sanitized_name} - {error_message}", exc_info=True)
                     failed_templates.append({
                         'name': template_name,
                         'error': error_message
@@ -257,7 +257,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
             })
             
         except Exception as e:
-            logger.error(f"Error getting template: {e}")
+            logger.error(f"Error getting template: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -281,7 +281,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
                 }), 404
                 
         except Exception as e:
-            logger.error(f"Error deleting template: {e}")
+            logger.error(f"Error deleting template: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -331,7 +331,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
                 })
                 
         except Exception as e:
-            logger.error(f"Error validating template: {e}")
+            logger.error(f"Error validating template: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'
@@ -383,7 +383,7 @@ def create_template_routes(template_manager: TemplateManager) -> Blueprint:
             })
             
         except Exception as e:
-            logger.error(f"Error previewing command: {e}")
+            logger.error(f"Error previewing command: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': f'Internal server error: {str(e)}'

@@ -160,7 +160,7 @@ class EncodingEngine:
             try:
                 callback(job_id, progress)
             except Exception as e:
-                logger.error(f"Error in progress callback: {e}")
+                logger.error(f"Error in progress callback: {e}", exc_info=True)
     
     def _notify_status_change(self, job_id: str, status: EncodingStatus) -> None:
         """Notify all status callbacks"""
@@ -169,7 +169,7 @@ class EncodingEngine:
             try:
                 callback(job_id, status)
             except Exception as e:
-                logger.error(f"Error in status callback: {e}")
+                logger.error(f"Error in status callback: {e}", exc_info=True)
     
     def queue_encoding_job(self, file_name: str, title_number: int, movie_name: str, 
                           preset_name: str = None) -> str:
@@ -261,7 +261,7 @@ class EncodingEngine:
                         
                         del self.job_processes[job_id]
                     except Exception as e:
-                        logger.error(f"Error killing process for job {job_id}: {e}")
+                        logger.error(f"Error killing process for job {job_id}: {e}", exc_info=True)
                 
                 # Cancel the future
                 if job_id in self.job_futures:
@@ -385,7 +385,7 @@ class EncodingEngine:
                         if not already_included:
                             jobs.append(job)
                 except Exception as e:
-                    logger.error(f"Error loading jobs from {movie['file_name']}: {e}")
+                    logger.error(f"Error loading jobs from {movie['file_name']}: {e}", exc_info=True)
         
         # Cache the results
         with self._jobs_cache_lock:
@@ -449,7 +449,7 @@ class EncodingEngine:
                 self._start_encoding_job(job_id, job)
                 
             except Exception as e:
-                logger.error(f"Error in queue processing: {e}")
+                logger.error(f"Error in queue processing: {e}", exc_info=True)
                 time.sleep(10.0)  # Pause on error
         
         logger.info("Queue processing thread stopped")
@@ -622,12 +622,12 @@ class EncodingEngine:
                 self._handle_job_completion(job_id, job, True, "", all_output)
             else:
                 error_msg = f"HandBrake failed with exit code {process.returncode}"
-                logger.error(f"HandBrake failed for {job_id}: {error_msg}")
+                logger.error(f"HandBrake failed for {job_id}: {error_msg}", exc_info=True)
                 self._handle_job_completion(job_id, job, False, error_msg, all_output)
                 
         except Exception as e:
             error_msg = f"Encoding job failed: {str(e)}"
-            logger.error(f"Error in encoding job {job_id}: {e}")
+            logger.error(f"Error in encoding job {job_id}: {e}", exc_info=True)
             self._handle_job_completion(job_id, job, False, error_msg, [])
     
     def _build_handbrake_command(self, job: EncodingJob) -> List[str]:
@@ -851,7 +851,7 @@ class EncodingEngine:
                 else:
                     job.failure_logs = []
                 
-                logger.error(f"Encoding job failed: {job_id} - {error_msg}")
+                logger.error(f"Encoding job failed: {job_id} - {error_msg}", exc_info=True)
                 
                 # Send failure notification
                 self._send_notification(
@@ -898,7 +898,7 @@ class EncodingEngine:
                 os.remove(job.output_path)
                 logger.info(f"Cleaned up output file: {job.output_path}")
             except Exception as e:
-                logger.error(f"Error cleaning up output file {job.output_path}: {e}")
+                logger.error(f"Error cleaning up output file {job.output_path}: {e}", exc_info=True)
 
 
     def _generate_output_filename(self, movie_name: str, preset_name: str) -> str:
@@ -942,7 +942,7 @@ class EncodingEngine:
             self._invalidate_jobs_cache()
             
         except Exception as e:
-            logger.error(f"Error updating job in metadata: {e}")
+            logger.error(f"Error updating job in metadata: {e}", exc_info=True)
     
     def _complete_job_metadata_update(self, job_id: str, job: EncodingJob) -> None:
         """
@@ -1011,7 +1011,7 @@ class EncodingEngine:
             self._invalidate_jobs_cache()
             
         except Exception as e:
-            logger.error(f"Error completing job metadata update: {e}")
+            logger.error(f"Error completing job metadata update: {e}", exc_info=True)
     
     def _add_job_to_history(self, job: EncodingJob) -> None:
         """Add completed job to encoding history"""
@@ -1049,7 +1049,7 @@ class EncodingEngine:
             self.metadata_manager.save_metadata(job.file_name, metadata)
             
         except Exception as e:
-            logger.error(f"Error adding job to history: {e}")
+            logger.error(f"Error adding job to history: {e}", exc_info=True)
 
 
     def _load_settings(self) -> None:
@@ -1068,7 +1068,7 @@ class EncodingEngine:
                     self.settings = EncodingSettings.from_dict(settings_data)
                 logger.info("Loaded encoding settings from file")
             except Exception as e:
-                logger.error(f"Error loading encoding settings: {e}")
+                logger.error(f"Error loading encoding settings: {e}", exc_info=True)
                 self.settings = EncodingSettings.get_default()
         else:
             self.settings = EncodingSettings.get_default()
@@ -1089,7 +1089,7 @@ class EncodingEngine:
                 json.dump(self.settings.to_dict(), f, indent=2)
             logger.info("Saved encoding settings to file")
         except Exception as e:
-            logger.error(f"Error saving encoding settings: {e}")
+            logger.error(f"Error saving encoding settings: {e}", exc_info=True)
 
 
     def update_settings(self, new_settings: EncodingSettings) -> None:
@@ -1145,12 +1145,12 @@ class EncodingEngine:
                 try:
                     callback(notification_data)
                 except Exception as e:
-                    logger.error(f"Error in notification callback: {e}")
+                    logger.error(f"Error in notification callback: {e}", exc_info=True)
                     
             logger.info(f"Notification sent: {notification_type} - {message}")
             
         except Exception as e:
-            logger.error(f"Error sending notification: {e}")
+            logger.error(f"Error sending notification: {e}", exc_info=True)
     
     def _check_queue_empty_notification(self) -> None:
         """Check if queue is empty and send notification if needed"""
@@ -1166,7 +1166,7 @@ class EncodingEngine:
                     None
                 )
         except Exception as e:
-            logger.error(f"Error checking queue empty notification: {e}")
+            logger.error(f"Error checking queue empty notification: {e}", exc_info=True)
     
     def _recover_jobs_from_metadata(self) -> None:
         """
@@ -1238,7 +1238,7 @@ class EncodingEngine:
                         self.metadata_manager.save_metadata(movie['file_name'], metadata)
                         
                 except Exception as e:
-                    logger.error(f"Error recovering jobs from {movie['file_name']}: {e}")
+                    logger.error(f"Error recovering jobs from {movie['file_name']}: {e}", exc_info=True)
             
             # Log recovery results
             total_recovered = recovered_count + requeued_count
@@ -1252,7 +1252,7 @@ class EncodingEngine:
                 logger.info("Job recovery completed: No jobs to recover")
                 
         except Exception as e:
-            logger.error(f"Error during job recovery: {e}")
+            logger.error(f"Error during job recovery: {e}", exc_info=True)
     
     def get_template_manager(self) -> TemplateManager:
         """Get the template manager instance"""

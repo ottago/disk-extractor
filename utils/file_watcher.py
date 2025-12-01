@@ -90,7 +90,7 @@ class MovieFileHandler(FileSystemEventHandler):
                     event_data['file_type']
                 )
             except Exception as e:
-                logger.error(f"Error processing file event: {e}")
+                logger.error(f"Error processing file event: {e}", exc_info=True)
 
 
 class FileWatcherService:
@@ -142,7 +142,7 @@ class FileWatcherService:
             directory = Path(directory).resolve()
             
             if not directory.exists() or not directory.is_dir():
-                logger.error(f"Invalid directory for watching: {directory}")
+                logger.error(f"Invalid directory for watching: {directory}", exc_info=True)
                 return False
             
             # Stop existing watcher if running
@@ -164,7 +164,7 @@ class FileWatcherService:
                 return True
                 
         except Exception as e:
-            logger.error(f"Failed to start file watching: {e}")
+            logger.error(f"Failed to start file watching: {e}", exc_info=True)
             return False
     
     def stop_watching(self) -> None:
@@ -176,7 +176,7 @@ class FileWatcherService:
                     self.observer.join(timeout=5.0)  # Wait up to 5 seconds
                     logger.info(f"Stopped watching directory: {self.watched_directory}")
                 except Exception as e:
-                    logger.error(f"Error stopping file watcher: {e}")
+                    logger.error(f"Error stopping file watcher: {e}", exc_info=True)
                 finally:
                     self.observer = None
                     self.is_running = False
@@ -210,7 +210,7 @@ class FileWatcherService:
                 callback(event_type, file_path, file_type)
             except Exception as e:
                 callback_name = getattr(callback, '__name__', str(callback))
-                logger.error(f"Error in file watcher callback {callback_name}: {e}")
+                logger.error(f"Error in file watcher callback {callback_name}: {e}", exc_info=True)
     
     def get_stats(self) -> Dict[str, Any]:
         """

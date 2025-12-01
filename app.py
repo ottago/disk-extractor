@@ -70,7 +70,7 @@ def handle_request_file_list():
             'directory': str(manager.directory) if manager.directory else None
         })
     except Exception as e:
-        logger.error(f"Error sending file list: {e}")
+        logger.error(f"Error sending file list: {e}", exc_info=True)
         emit('error', {'message': 'Failed to get file list'})
 
 
@@ -110,7 +110,7 @@ def handle_request_encoding_status():
             }
         })
     except Exception as e:
-        logger.error(f"Error sending encoding status: {e}")
+        logger.error(f"Error sending encoding status: {e}", exc_info=True)
         emit('error', {'message': 'Failed to get encoding status'})
 
 
@@ -124,7 +124,7 @@ def notify_encoding_progress(job_id: str, progress: EncodingProgress) -> None:
         })
         logger.debug(f"Sent progress update for job: {job_id} - {progress.percentage}%")
     except Exception as e:
-        logger.error(f"Error notifying encoding progress: {e}")
+        logger.error(f"Error notifying encoding progress: {e}", exc_info=True)
 
 
 def notify_encoding_status_change(job_id: str, status: EncodingStatus) -> None:
@@ -149,7 +149,7 @@ def notify_encoding_status_change(job_id: str, status: EncodingStatus) -> None:
         
         notify_file_changes('encoding_status_updated', filename)
     except Exception as e:
-        logger.error(f"Error notifying encoding status change: {e}")
+        logger.error(f"Error notifying encoding status change: {e}", exc_info=True)
 
 
 def notify_file_changes(change_type: str, filename: Optional[str] = None) -> None:
@@ -242,7 +242,7 @@ def download_output_file(filename: str) -> Union[Response, tuple]:
         
         # Get the movies directory from metadata manager
         if not manager or not manager.directory:
-            logger.error("Movies directory not configured")
+            logger.error("Movies directory not configured", exc_info=True)
             return jsonify({'success': False, 'error': 'Movies directory not configured'}), 500
         
         # Search for the file in encoding history to get the correct path
@@ -279,7 +279,7 @@ def download_output_file(filename: str) -> Union[Response, tuple]:
         return send_file(file_path, as_attachment=True, download_name=filename)
         
     except Exception as e:
-        logger.error(f"Error downloading file {filename}: {e}")
+        logger.error(f"Error downloading file {filename}: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'Download failed'}), 500
 
 
@@ -349,7 +349,7 @@ def health() -> Union[Response, tuple]:
             }
         })
     except Exception as e:
-        logger.error(f"Error in health check: {e}")
+        logger.error(f"Error in health check: {e}", exc_info=True)
         return jsonify({
             'status': 'error',
             'error': str(e)
@@ -379,7 +379,7 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
     try:
         Config.validate()
     except ValueError as e:
-        logger.error(f"Configuration error: {e}")
+        logger.error(f"Configuration error: {e}", exc_info=True)
         sys.exit(1)
     
     # Set directory if provided
@@ -388,7 +388,7 @@ def create_app(directory: Optional[Union[str, Path]] = None) -> Flask:
             manager.set_directory(directory)
             logger.info(f"Using directory: {directory}")
         except MetadataError as e:
-            logger.error(f"Error setting directory: {e}")
+            logger.error(f"Error setting directory: {e}", exc_info=True)
             sys.exit(1)
     
     # Register file change callback
@@ -490,7 +490,7 @@ def main() -> None:
         from utils.file_watcher import file_watcher
         file_watcher.stop_watching()
     except Exception as e:
-        logger.error(f"Application error: {e}")
+        logger.error(f"Application error: {e}", exc_info=True)
         # Clean up encoding engine
         encoding_engine.stop()
         sys.exit(1)
